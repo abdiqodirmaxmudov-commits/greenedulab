@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tabiatda azotning aylanishi — 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#cfe6f5; --ink:#1c2733; --muted:#4d5d6c; --panel:rgba(255,255,255,.86);
+  --line:rgba(28,39,51,.14); --chip:rgba(255,255,255,.92); --chip-ink:#1c2733;
+  --sky:#bfe0f4; --soil:#c89a68;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1a24; --ink:#e7eef5; --muted:#9fb0bf; --panel:rgba(18,28,38,.86);
+    --line:rgba(231,238,245,.14); --chip:rgba(20,30,42,.9); --chip-ink:#e7eef5;
+    --sky:#16283a; --soil:#7a5a3c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1a24; --ink:#e7eef5; --muted:#9fb0bf; --panel:rgba(18,28,38,.86);
+  --line:rgba(231,238,245,.14); --chip:rgba(20,30,42,.9); --chip-ink:#e7eef5;
+  --sky:#16283a; --soil:#7a5a3c;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#stage{position:relative;width:100%;height:100%}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;left:0;top:0;transform:translate(-50%,-50%);white-space:nowrap;
+  font-size:12px;line-height:1.25;padding:3px 8px;border-radius:6px;background:var(--chip);
+  color:var(--chip-ink);border:1px solid var(--line);will-change:transform}
+.lbl.node{font-weight:700;font-size:13px;border-left:4px solid var(--c)}
+.lbl.node small{display:block;font-weight:400;font-style:italic;font-size:11px;color:var(--muted)}
+.lbl.edge{font-size:11px;color:var(--c);font-weight:500;background:var(--chip)}
+.lbl.big{font-size:15px;padding:6px 12px}
+body.no-edge .lbl.edge{display:none}
+header{position:absolute;left:16px;top:calc(12px + env(safe-area-inset-top,0px));max-width:min(420px,calc(100% - 32px));
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;backdrop-filter:blur(6px)}
+h1{margin:0;font-size:20px;line-height:1.2}
+header p{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.ctrls{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+button{font:inherit;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);cursor:pointer}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+button:focus-visible{outline:2px solid #3b6fe0;outline-offset:2px}
+#legend{position:absolute;right:16px;top:calc(12px + env(safe-area-inset-top,0px));background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:12px;backdrop-filter:blur(6px)}
+#legend div{display:flex;align-items:center;gap:8px;margin:3px 0}
+#legend i{width:22px;height:4px;border-radius:2px;background:var(--c)}
+#info{position:absolute;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:min(440px,calc(100% - 32px));
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13px;
+  line-height:1.5;backdrop-filter:blur(6px)}
+#info h2{margin:0 0 4px;font-size:15px}
+#info p{margin:0;color:var(--muted)}
+@media (max-width:700px){
+  #legend{top:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:12px;font-size:11px}
+  #info{bottom:calc(150px + env(safe-area-inset-bottom,0px));left:12px}
+  header{left:12px}
+  .lbl{font-size:10px}.lbl.node{font-size:11px}.lbl.edge{font-size:9px}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" aria-label="Azot aylanishining uch o'lchamli modeli"></canvas>
+  <div id="labels"></div>
+  <header>
+    <h1>Tabiatda azotning aylanishi</h1>
+    <p>Aylantirish uchun sichqoncha yoki barmoq bilan torting, g'ildirak yoki ikki barmoq bilan yaqinlashtiring. Tugunni bosing — izoh chiqadi.</p>
+    <div class="ctrls">
+      <button id="bRot" aria-pressed="true">Avto-aylanish</button>
+      <button id="bEdge" aria-pressed="true">Jarayon nomlari</button>
+      <button id="bFlow" aria-pressed="true">Oqim zarrachalari</button>
+      <button id="bReset">Boshlang'ich ko'rinish</button>
+    </div>
+  </header>
+  <div id="legend" aria-label="Jarayonlar">
+    <div style="--c:#22a06b"><i></i>Azot fiksatsiyasi</div>
+    <div style="--c:#3b6fe0"><i></i>Nitrifikatsiya</div>
+    <div style="--c:#e0533d"><i></i>Denitrifikatsiya</div>
+    <div style="--c:#d99a1e"><i></i>O'zlashtirish, oziq zanjiri</div>
+    <div style="--c:#8e5bd6"><i></i>Ammonifikatsiya</div>
+    <div style="--c:#6b7a8f"><i></i>Abiotik jarayonlar</div>
+  </div>
+  <div id="info" aria-live="polite">
+    <h2>Nitratlar (NO₃⁻)</h2>
+    <p>Aylanishning markazi: o'simliklar tuproqdan o'zlashtiradigan azotning asosiy shakli.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const C = {fix:0x22a06b, nit:0x3b6fe0, den:0xe0533d, food:0xd99a1e, amm:0x8e5bd6, abio:0x6b7a8f};
+const hex = n => '#'+n.toString(16).padStart(6,'0');
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45,1,0.1,400);
+
+function applyTheme(){
+  const cs = getComputedStyle(document.documentElement);
+  const sky = new THREE.Color(cs.getPropertyValue('--sky').trim() || '#bfe0f4');
+  scene.background = sky;
+  scene.fog = new THREE.Fog(sky, 60, 140);
+}
+applyTheme();
+try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); }catch(e){}
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a6a4a, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75);
+sun.position.set(-15,30,20); scene.add(sun);
+
+const mat = (c,o={}) => new THREE.MeshLambertMaterial(Object.assign({color:c, flatShading:true}, o));
+
+/* ---------- Tuproq bloki ---------- */
+const soilTop = mat(0xd8b183), soilSide = mat(0xa87a4d);
+const ground = new THREE.Mesh(new THREE.BoxGeometry(46,5,28),
+  [soilSide,soilSide,soilTop,soilSide,soilSide,soilSide]);
+ground.position.y = -2.5; scene.add(ground);
+const layer = new THREE.Mesh(new THREE.BoxGeometry(46.05,1.6,28.05), mat(0x7f5835));
+layer.position.y = -4.2; scene.add(layer);
+
+/* ---------- Obyektlar ---------- */
+function tree(x,z,s){
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35*s,0.55*s,4*s,7), mat(0x8a5a36));
+  trunk.position.y = 2*s; g.add(trunk);
+  const leaf = mat(0x3f9a4a);
+  [[0,5,0,2.2],[1.4,4.5,0.4,1.6],[-1.4,4.6,-0.3,1.7],[0.3,4.3,-1.3,1.5],[-0.2,6.1,0.5,1.5],[0.6,4.4,1.3,1.4]]
+    .forEach(p=>{const m=new THREE.Mesh(new THREE.IcosahedronGeometry(p[3]*s,0),leaf);
+      m.position.set(p[0]*s,p[1]*s,p[2]*s); g.add(m);});
+  g.position.set(x,0,z); scene.add(g); return g;
+}
+tree(-10,-6,1.6); tree(10,-6,1.0); tree(16.5,-4.5,0.9);
+
+// tog' jinslari
+const rockM = mat(0x8c5a3c);
+[[-13,0.6,2,1.6],[-11.6,0.4,2.8,1.0],[-13.8,0.35,3.3,0.8]].forEach(r=>{
+  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(r[3],0),rockM);
+  m.position.set(r[0],r[1],r[2]); m.scale.y=0.55; scene.add(m);});
+
+// bulut va chaqmoq
+const cloudM = mat(0x9aa4ae);
+[[6,15,-4,1.8],[7.8,15.3,-4,2.2],[9.7,15,-4,1.7],[7.6,16.3,-4.3,1.6]].forEach(p=>{
+  const m=new THREE.Mesh(new THREE.IcosahedronGeometry(p[3],1),cloudM); m.position.set(p[0],p[1],p[2]); scene.add(m);});
+const boltPts=[[7.5,13.6,-3.6],[6.9,12.4,-3.4],[7.7,12.2,-3.4],[6.8,10.6,-3.2]].map(a=>new THREE.Vector3(...a));
+const boltMat = new THREE.MeshBasicMaterial({color:0xffd23f, transparent:true});
+const bolt = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(boltPts,false,'catmullrom',0),20,0.12,6,false), boltMat);
+scene.add(bolt);
+
+// kichik o'simlik
+const sprout = new THREE.Group();
+for(let i=0;i<5;i++){const c=new THREE.Mesh(new THREE.ConeGeometry(0.35,1.6,5),mat(0x4caf50));
+  c.position.set(Math.cos(i*1.26)*0.35,0.8,Math.sin(i*1.26)*0.35); c.rotation.z=Math.cos(i*1.26)*0.4; c.rotation.x=-Math.sin(i*1.26)*0.4; sprout.add(c);}
+sprout.position.set(8,0,1); scene.add(sprout);
+
+// hayvon (sigir)
+const cow = new THREE.Group();
+const cowM = mat(0xf1e6d6), cowD = mat(0x5a3d2b);
+const body=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.2,1.1),cowM); body.position.y=1.5; cow.add(body);
+const spot=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.7,1.12),cowD); spot.position.set(-0.4,1.7,0); cow.add(spot);
+const head=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.7,0.7),cowM); head.position.set(1.6,1.9,0); cow.add(head);
+[[-1,-0.35],[-1,0.35],[1,-0.35],[1,0.35]].forEach(l=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.9,5),cowD);
+  m.position.set(l[0],0.45,l[1]); cow.add(m);});
+cow.position.set(13,0,3); cow.rotation.y=-0.5; scene.add(cow);
+
+// o'lik organik moddalar: to'nka, zamburug'lar, suyak
+const stump=new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.2,2.2,8),mat(0x7a4f2e)); stump.position.set(16,1.1,9); scene.add(stump);
+[[14.8,9.8],[17.2,8.3],[15.6,10.4],[16.9,10]].forEach(p=>{
+  const st=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.1,0.5,5),mat(0xf3e9d8)); st.position.set(p[0],0.25,p[1]); scene.add(st);
+  const cap=new THREE.Mesh(new THREE.SphereGeometry(0.28,8,4,0,Math.PI*2,0,Math.PI/2),mat(0xd2483b)); cap.position.set(p[0],0.5,p[1]); scene.add(cap);});
+const bone=new THREE.Group(); const bm=mat(0xefe8da);
+const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,2,6),bm); shaft.rotation.z=Math.PI/2; bone.add(shaft);
+[-1,1].forEach(x=>[-0.18,0.18].forEach(z=>{const b=new THREE.Mesh(new THREE.SphereGeometry(0.25,6,5),bm); b.position.set(x,0,z); bone.add(b);}));
+bone.position.set(12.5,0.25,10.5); bone.rotation.y=0.6; scene.add(bone);
+
+// bakteriyalar
+const bacM = mat(0x22a06b);
+for(let i=0;i<9;i++){const b=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.6,6),bacM);
+  b.position.set(-14+Math.random()*2.5,0.2,8+Math.random()*2); b.rotation.set(Math.PI/2,0,Math.random()*3); scene.add(b);}
+
+/* ---------- Tugunlar ---------- */
+const N = {
+  n2:{p:[-4,12.5,-1], c:C.abio, t:"Atmosferadagi azot (N₂)", big:1,
+      d:"Havoning taxminan 78% ini tashkil qiladi. N≡N uch bog'i juda mustahkam, shuning uchun ko'pchilik organizmlar N₂ ni bevosita o'zlashtira olmaydi."},
+  bolt:{p:[6.6,10.2,-3.1], c:C.abio, t:"Chaqmoq atmosfera azotini bog'laydi",
+      d:"Chaqmoq energiyasi N₂ va O₂ ni azot oksidlariga aylantiradi. Ular yomg'ir suvida nitrat kislota hosil qilib, tuproqqa nitrat sifatida tushadi."},
+  nitrate:{p:[0,1.2,3], c:0x2b3f8f, t:"Nitratlar (NO₃⁻)", big:1,
+      d:"Aylanishning markazi: o'simliklar tuproqdan o'zlashtiradigan azotning asosiy shakli."},
+  rock:{p:[-13,2.2,2.4], c:C.abio, t:"Anorganik moddalar, masalan, tog' jinslari",
+      d:"Tog' jinslarining nurashi natijasida tuproqqa oz miqdorda azot birikmalari o'tadi."},
+  fix:{p:[-13,1.4,9], c:C.fix, t:"Azot fiksatsiyalovchi bakteriyalar", s:"Azotobacter, Clostridium, Rhizobium, Nostoc",
+      d:"Nitrogenaza fermenti yordamida N₂ ni ammiakka (NH₃) aylantiradi. Rhizobium dukkakli o'simliklar ildiz tuganaklarida yashaydi, Nostoc sianobakteriya, Azotobacter va Clostridium esa tuproqda erkin yashaydi."},
+  nitN:{p:[-5,0.8,9], c:C.nit, t:"Nitritlar (NO₂⁻)",
+      d:"Nitrifikatsiyaning oraliq mahsuloti: Nitrosomonas ammiakni nitritga, Nitrobacter esa nitritni nitratga oksidlaydi."},
+  nitD:{p:[-6.5,4.2,3.5], c:C.den, t:"Nitritlar (NO₂⁻)",
+      d:"Denitrifikatsiyaning birinchi bosqichi. Kislorod yetishmaydigan (anaerob) tuproqda bakteriyalar nitratni nitritga qaytaradi."},
+  gas:{p:[-6,8.4,1.5], c:C.den, t:"NO, N₂O",
+      d:"Denitrifikatsiyaning oraliq gazlari: azot(II) oksidi va azot(I) oksidi. Oxirida N₂ hosil bo'lib, atmosferaga qaytadi."},
+  amm:{p:[3,0.8,10], c:C.amm, t:"Ammiak (NH₃) / ammoniy (NH₄⁺)",
+      d:"Organik moddalar parchalanishi va azot fiksatsiyasi mahsuloti. Tuproqda asosan ammoniy ioni (NH₄⁺) holida bo'ladi."},
+  plant:{p:[8.5,2.6,0.5], c:C.food, t:"O'simliklar",
+      d:"Nitratlar va ammoniy ionlari o'simliklar tomonidan o'zlashtirilib, oqsillar, nuklein kislotalar va boshqa birikmalarga aylantiriladi."},
+  animal:{p:[13,3.4,3], c:C.food, t:"Hayvonlar",
+      d:"O'simlik oqsillari hayvonlar tomonidan iste'mol qilinadi va hayvon oqsillariga aylanadi."},
+  dead:{p:[15,3.2,9.5], c:C.amm, t:"O'lik organik moddalar", s:"oqsillar va boshqa moddalarni saqlaydi",
+      d:"Nobud bo'lgan o'simlik va hayvonlar, ularning chiqindilari. Chirituvchi organizmlar ularni parchalaydi."}
+};
+const V = a => new THREE.Vector3(a[0],a[1],a[2]);
+const pickable = [];
+const labelsEl = document.getElementById('labels');
+const labelObjs = [];
+function addLabel(html, pos, cls, color){
+  const el=document.createElement('div'); el.className='lbl '+cls; el.innerHTML=html;
+  el.style.setProperty('--c', hex(color)); labelsEl.appendChild(el);
+  labelObjs.push({el,pos}); return el;
+}
+for(const k in N){
+  const n=N[k], pos=V(n.p);
+  const r = n.big?0.55:0.32;
+  const m=new THREE.Mesh(new THREE.SphereGeometry(r,16,12), new THREE.MeshLambertMaterial({color:n.c, emissive:n.c, emissiveIntensity:0.35}));
+  m.position.copy(pos); m.userData.key=k; scene.add(m); pickable.push(m); n.mesh=m;
+  if(k==='nitrate'){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(1.1,0.07,8,40), new THREE.MeshBasicMaterial({color:n.c}));
+    ring.rotation.x=Math.PI/2; ring.position.copy(pos); scene.add(ring); n.ring=ring;
+  }
+  addLabel(n.t+(n.s?'<small>'+n.s+'</small>':''), pos.clone().add(new THREE.Vector3(0,n.big?1.1:0.8,0)), 'node'+(n.big?' big':''), n.c);
+}
+
+/* ---------- Strelkalar (jarayonlar) ---------- */
+const E = [
+  ['n2','fix',   C.fix, "Biologik azot fiksatsiyasi", [-17,11,4]],
+  ['fix','amm',  C.fix, "N₂ → NH₃ (fiksatsiya)", null, 3],
+  ['bolt','nitrate', C.abio, "", null, 1],
+  ['rock','nitrate', C.abio, "Nurash", null, 1.5],
+  ['amm','nitN', C.nit, "Nitrifikatsiyalovchi bakteriyalar (Nitrosomonas)", null, 1.6],
+  ['nitN','nitrate', C.nit, "Nitrifikatsiyalovchi bakteriyalar (Nitrobacter)", null, 1.6],
+  ['nitrate','nitD', C.den, "Denitrifikatsiyalovchi bakteriyalar", null, 1],
+  ['nitD','gas', C.den, "Denitrifikatsiya", null, 0.8],
+  ['gas','n2',   C.den, "N₂ atmosferaga qaytadi", null, 0.8],
+  ['nitrate','plant', C.food, "O'simliklar o'zlashtiradi", null, 2],
+  ['amm','plant', C.food, "Ammoniy ionlari ko'rinishida (NH₄⁺)", null, 2],
+  ['plant','animal', C.food, "Hayvonlar iste'mol qiladi", null, 1.4],
+  ['plant','dead', C.food, "Nobud bo'lgan o'simliklar", [15,6,1]],
+  ['animal','dead', C.food, "Nobud bo'lish, chiqindilar", null, 1],
+  ['dead','amm', C.amm, "Ammonifikatsiyalovchi (chirituvchi) bakteriyalar", null, 2]
+];
+const flows = [];
+E.forEach(([a,b,col,txt,ctrl,h])=>{
+  const A=V(N[a].p), B=V(N[b].p);
+  let mid;
+  if(ctrl) mid=V(ctrl);
+  else { mid=A.clone().lerp(B,0.5); mid.y += (h||1)+A.distanceTo(B)*0.12; }
+  const full=new THREE.QuadraticBezierCurve3(A,mid,B);
+  const pts=[]; for(let i=0;i<=30;i++) pts.push(full.getPoint(0.07+0.83*i/30));
+  const curve=new THREE.CatmullRomCurve3(pts);
+  const m=new THREE.MeshLambertMaterial({color:col, emissive:col, emissiveIntensity:0.25});
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,60,0.07,6,false),m));
+  const end=curve.getPoint(1), tan=curve.getTangent(1);
+  const cone=new THREE.Mesh(new THREE.ConeGeometry(0.26,0.7,10),m);
+  cone.position.copy(end).addScaledVector(tan,0.25);
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),tan);
+  scene.add(cone);
+  if(txt) addLabel(txt, curve.getPoint(0.5).add(new THREE.Vector3(0,0.45,0)), 'edge', col);
+  const dots=[];
+  for(let i=0;i<3;i++){
+    const d=new THREE.Mesh(new THREE.SphereGeometry(0.13,8,6), new THREE.MeshBasicMaterial({color:col}));
+    scene.add(d); dots.push({d,o:i/3});
+  }
+  flows.push({curve,dots,speed:0.12+Math.random()*0.05});
+});
+
+/* ---------- Kamera boshqaruvi ---------- */
+const target=new THREE.Vector3(1,3.5,3);
+const HOME={theta:0.25, phi:1.08, r:44};
+let cam=Object.assign({},HOME), autoRot=true;
+function placeCam(){
+  cam.phi=Math.max(0.2,Math.min(1.5,cam.phi)); cam.r=Math.max(12,Math.min(90,cam.r));
+  camera.position.set(
+    target.x+cam.r*Math.sin(cam.phi)*Math.sin(cam.theta),
+    target.y+cam.r*Math.cos(cam.phi),
+    target.z+cam.r*Math.sin(cam.phi)*Math.cos(cam.theta));
+  camera.lookAt(target);
+}
+const ptrs=new Map(); let pinch0=0, moved=0;
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); moved=0;
+  if(ptrs.size===2){const [p,q]=[...ptrs.values()]; pinch0=Math.hypot(p.x-q.x,p.y-q.y);}});
+canvas.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId)) return;
+  const prev=ptrs.get(e.pointerId); const dx=e.clientX-prev.x, dy=e.clientY-prev.y;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===1){cam.theta-=dx*0.006; cam.phi-=dy*0.006; moved+=Math.abs(dx)+Math.abs(dy); setAuto(false);}
+  else if(ptrs.size===2){const [p,q]=[...ptrs.values()]; const d=Math.hypot(p.x-q.x,p.y-q.y);
+    if(pinch0){cam.r*=pinch0/d;} pinch0=d; moved+=10;}
+});
+const up=e=>{
+  if(ptrs.size===1 && moved<6) pick(e);
+  ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=0;
+};
+canvas.addEventListener('pointerup',up); canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);});
+canvas.addEventListener('wheel',e=>{e.preventDefault(); cam.r*=1+Math.sign(e.deltaY)*0.08;},{passive:false});
+
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+const info=document.getElementById('info');
+function pick(e){
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hit=ray.intersectObjects(pickable)[0];
+  if(hit) showInfo(hit.object.userData.key);
+}
+let selected='nitrate';
+function showInfo(k){
+  selected=k; const n=N[k];
+  info.innerHTML='<h2>'+n.t+'</h2>'+(n.s?'<p><i>'+n.s+'</i></p>':'')+'<p>'+n.d+'</p>';
+}
+
+/* ---------- Tugmalar ---------- */
+const bRot=document.getElementById('bRot'), bEdge=document.getElementById('bEdge'), bFlow=document.getElementById('bFlow');
+function setAuto(v){autoRot=v; bRot.setAttribute('aria-pressed',v);}
+bRot.onclick=()=>setAuto(!autoRot);
+bEdge.onclick=()=>{const v=bEdge.getAttribute('aria-pressed')!=='true'; bEdge.setAttribute('aria-pressed',v); document.body.classList.toggle('no-edge',!v);};
+let flowOn=true;
+bFlow.onclick=()=>{flowOn=!flowOn; bFlow.setAttribute('aria-pressed',flowOn); flows.forEach(f=>f.dots.forEach(o=>o.d.visible=flowOn));};
+document.getElementById('bReset').onclick=()=>{cam=Object.assign({},HOME);};
+const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce) setAuto(false);
+
+/* ---------- Render ---------- */
+function resize(){
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize); resize();
+
+const tmp=new THREE.Vector3(); const clock=new THREE.Clock();
+function frame(){
+  const dt=clock.getDelta(), t=clock.elapsedTime;
+  if(autoRot) cam.theta+=dt*0.08;
+  placeCam();
+  flows.forEach(f=>f.dots.forEach(o=>{ const u=((reduce?0:t*f.speed)+o.o)%1; o.d.position.copy(f.curve.getPoint(u)); }));
+  boltMat.opacity = reduce?1:(Math.sin(t*9)>0.6 || (t%3)<0.15 ? 1 : 0.25);
+  if(N.nitrate.ring) N.nitrate.ring.scale.setScalar(1+0.08*Math.sin(t*2));
+  for(const k in N) N[k].mesh.scale.setScalar(k===selected?1.35:1);
+  renderer.render(scene,camera);
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  labelObjs.forEach(l=>{
+    tmp.copy(l.pos).project(camera);
+    if(tmp.z>1){l.el.style.visibility='hidden';return;}
+    l.el.style.visibility='visible';
+    l.el.style.transform='translate(-50%,-50%) translate('+((tmp.x+1)/2*w).toFixed(1)+'px,'+((1-tmp.y)/2*h).toFixed(1)+'px)';
+    l.el.style.left='0'; l.el.style.top='0';
+    l.el.style.zIndex=String(1000-Math.round(tmp.z*1000));
+  });
+  requestAnimationFrame(frame);
+}
+frame();
+})();
+</script>
+</body>
+</html>
