@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Toza Yer VR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;700&display=swap">
+<style>
+/* Layout: full-bleed 3D world; the interface floats at the edges as translucent "field kit" panels.
+   Single committed dark look: the UI sits over a live 3D scene, so it stays dark in both host themes. */
+:root{
+  --ink:#0d1b15;
+  --panel:rgba(13,30,23,.80);
+  --panel-solid:#11261d;
+  --line:rgba(186,230,196,.18);
+  --text:#eef6ef;
+  --muted:#a8c2b0;
+  --leaf:#7ddc6a;
+  --warn:#ffb347;
+  --bad:#ff6f61;
+  --display:"Unbounded","Trebuchet MS",system-ui,sans-serif;
+  --body:"Manrope","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--body);font-size:14px;overflow:hidden}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#scene.pointing{cursor:pointer}
+
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none}
+.hud>*{pointer-events:auto}
+.brand{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:.02em;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;backdrop-filter:blur(6px)}
+.brand span{color:var(--leaf)}
+.stats{display:flex;flex-wrap:wrap;gap:6px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:7px 10px;display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;backdrop-filter:blur(6px)}
+.lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.stat b{font-size:15px;min-width:2ch;text-align:right}
+.bar{width:84px;height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#b9a95a,var(--leaf));transition:width .6s ease}
+.actions{margin-left:auto;display:flex;gap:6px}
+
+button{font:600 14px var(--body);color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer;backdrop-filter:blur(6px)}
+button:hover{border-color:rgba(186,230,196,.45)}
+button.primary{background:var(--leaf);color:#0b2012;border-color:transparent}
+button.primary:hover{filter:brightness(1.07)}
+button:disabled{opacity:.55;cursor:not-allowed;filter:none}
+button:focus-visible{outline:2px solid var(--leaf);outline-offset:2px}
+
+.hold{position:fixed;left:16px;right:16px;margin:0 auto;width:fit-content;max-width:calc(100% - 32px);bottom:calc(128px + env(safe-area-inset-bottom,0px));background:rgba(125,220,106,.16);border:1px solid rgba(125,220,106,.5);color:var(--text);border-radius:99px;padding:8px 16px;font-weight:600;text-align:center}
+.msg{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:580px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--muted);border-radius:12px;padding:12px 16px;backdrop-filter:blur(8px)}
+.msg.good{border-left-color:var(--leaf)}
+.msg.bad{border-left-color:var(--bad)}
+.msg.warn{border-left-color:var(--warn)}
+.msg strong{font-family:var(--display);font-weight:500;font-size:14.5px;display:block;margin-bottom:4px}
+.msg.good strong{color:var(--leaf)}
+.msg.bad strong{color:var(--bad)}
+.msg.warn strong{color:var(--warn)}
+.msg p{margin:0;line-height:1.5;color:var(--muted)}
+
+.overlay{position:fixed;inset:0;display:grid;place-items:center;padding:24px 16px;background:rgba(6,15,11,.58);overflow:auto}
+.card{max-width:580px;width:100%;background:var(--panel-solid);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--leaf);font-weight:700}
+.card h1,.card h2{font-family:var(--display);font-weight:700;line-height:1.15;margin:.35em 0 .45em;text-wrap:balance}
+.card h1{font-size:clamp(23px,5vw,32px)}
+.card h2{font-size:clamp(22px,4.6vw,28px)}
+.card p{line-height:1.6;color:var(--muted);margin:0 0 12px;max-width:62ch}
+.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0;display:grid;gap:10px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;line-height:1.5}
+.steps li::before{content:counter(s);font-family:var(--display);font-size:12px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(125,220,106,.15);color:var(--leaf)}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 16px}
+.chip{display:flex;align-items:center;gap:8px;font-size:13px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.05);min-width:0}
+.chip i{width:14px;height:14px;border-radius:4px;flex:none}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{font-size:13px;color:var(--muted);line-height:1.55;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px;margin:0 0 16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0 16px}
+.results div{background:rgba(255,255,255,.05);border-radius:12px;padding:12px;display:grid;gap:4px}
+.results b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
+body.stereo .hud,body.stereo .msg,body.stereo .hold{display:none!important}
+.divider{position:fixed;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:#000;pointer-events:none}
+#exitStereo{position:fixed;left:50%;transform:translateX(-50%);top:calc(8px + env(safe-area-inset-top,0px));font-size:12px;padding:6px 12px;opacity:.7}
+@media (max-width:560px){
+  .legend{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .actions{margin-left:0}
+  .bar{width:60px}
+  .msg{padding:10px 12px}
+}
+</style>
+</head>
+<body>
+
+
+<canvas id="scene" tabindex="0" aria-label="3D oʻyin maydoni: chiqindilarni terib, konteynerlarga saralang"></canvas>
+
+<header class="hud">
+  <div class="brand">Toza Yer <span>VR</span></div>
+  <div class="stats">
+    <div class="stat"><span class="lbl">Tozalik</span><div class="bar"><i id="barFill"></i></div><b id="cleanPct">0%</b></div>
+    <div class="stat"><span class="lbl">Ball</span><b id="score">0</b></div>
+    <div class="stat"><span class="lbl">Qoldi</span><b id="left">24</b></div>
+    <div class="stat"><span class="lbl">Xato</span><b id="miss">0</b></div>
+  </div>
+  <div class="actions">
+    <button id="helpBtn" type="button">Yordam</button>
+    <button id="cardBtn" type="button" class="primary">Cardboard VR</button>
+    <button id="vrBtn" type="button" class="primary" hidden>VR shlem</button>
+  </div>
+</header>
+
+<div id="stereoUi" hidden><div class="divider"></div><button id="exitStereo" type="button">VR dan chiqish</button></div>
+
+<div id="hold" class="hold" hidden>Qoʻlingizda: <span id="holdName"></span>. Endi mos konteynerni tanlang</div>
+
+<section id="msg" class="msg" aria-live="polite">
+  <strong id="msgTitle">Vazifa</strong>
+  <p id="msgText">Atrofga 24 ta chiqindi sochilgan. Chiqindini tanlang va uni mos rangli konteynerga soling.</p>
+</section>
+
+<div id="startOv" class="overlay">
+  <div class="card" role="dialog" aria-labelledby="startTitle">
+    <div class="eyebrow">Ekologik taʼlim · 3D va VR</div>
+    <h1 id="startTitle">Yer yuzini chiqindilardan tozalang</h1>
+    <p>Atrofda 24 ta chiqindi yotibdi. Har birini terib, toʻgʻri konteynerga saralang. Siz tozalagan sari daraxtlar koʻkaradi, koʻl tiniqlashadi, havo musaffo boʻladi.</p>
+    <ol class="steps">
+      <li>Atrofga qarang: sichqoncha yoki barmoq bilan ekranni suring (klaviaturada ← →).</li>
+      <li>Chiqindini bosing. U qoʻlingizga olinadi.</li>
+      <li>Mos rangli konteynerni bosing. Toʻgʻri saralasangiz, chiqindi haqida qiziq fakt chiqadi.</li>
+    </ol>
+    <div class="legend" id="legend"></div>
+    <p class="note" id="vrNote"><b>Cardboard VR</b> (Android va iPhone): «Cardboard VR» tugmasini bosing va telefonni koʻzoynakka yotiq qoʻying. Boshingizni burib qarang, nishonni chiqindiga qaratib 1,5 soniya ushlab turing yoki Cardboard tugmasini bosing. Osmonga qarab ikki marta bossangiz, koʻrinish konteynerlar tomonga markazlashadi.<br><b>VR shlem</b> (Meta Quest): shlem brauzerida oching va «VR shlem» tugmasini bosing.<br>Ikkala rejim ham ilova HTTPS saytdan ochilganda toʻliq ishlaydi.</p>
+    <div class="row"><button id="startBtn" type="button" class="primary">Boshlash (3D)</button><button id="startCard" type="button">Cardboard VR</button><button id="startVr" type="button" hidden>VR shlem</button></div>
+  </div>
+</div>
+
+<div id="endOv" class="overlay" hidden>
+  <div class="card" role="dialog" aria-labelledby="endTitle">
+    <div class="eyebrow">Natija</div>
+    <h2 id="endTitle">Yer yuzi toza!</h2>
+    <div class="results">
+      <div><span class="lbl">Ball</span><b id="rScore">0</b></div>
+      <div><span class="lbl">Aniqlik</span><b id="rAcc">0%</b></div>
+      <div><span class="lbl">Vaqt</span><b id="rTime">0:00</b></div>
+    </div>
+    <p>Siz barcha chiqindilarni saraladingiz. Hayotda ham shunday: chiqindini uyda turlarga ajratish uni qayta ishlashning birinchi qadami.</p>
+    <div class="row"><button id="againBtn" type="button" class="primary">Qayta oʻynash</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- Data ---------- */
+const CATS={
+  plastik:{name:"Plastik",color:0xf2c230,css:"#f2c230",ex:"butilka · paket · stakan",rule:"Plastik butilka, paket va stakanlar sariq konteynerga solinadi."},
+  qogoz:{name:"Qogʻoz",color:0x3b82d6,css:"#3b82d6",ex:"karton · gazeta",rule:"Qogʻoz va karton koʻk konteynerga solinadi."},
+  shisha:{name:"Shisha",color:0x2fa25a,css:"#2fa25a",ex:"butilka · banka",rule:"Shisha butilka va bankalar yashil konteynerga solinadi."},
+  metall:{name:"Metall",color:0x9aa3ab,css:"#9aa3ab",ex:"banka · konserva",rule:"Alyuminiy va poʻlat bankalar kulrang konteynerga solinadi."},
+  organik:{name:"Organik",color:0x8a5a2b,css:"#8a5a2b",ex:"meva · poʻchoq",rule:"Oziq-ovqat qoldiqlari jigarrang konteynerga solinadi va kompostga aylanadi."},
+  xavfli:{name:"Xavfli",color:0xd9443a,css:"#d9443a",ex:"batareya · lampa",rule:"Batareyalar qizil konteynerga solinadi va maxsus usulda qayta ishlanadi."}
+};
+const CAT_ORDER=["plastik","qogoz","shisha","metall","organik","xavfli"];
+const ITEMS={
+  bottle:{cat:"plastik",name:"Plastik butilka",fact:"Plastik butilka tabiatda 450 yilgacha parchalanmaydi. Qayta ishlangan butilkalardan kiyim uchun sintetik tola olinadi."},
+  bag:{cat:"plastik",name:"Plastik paket",fact:"Plastik paketni dengiz toshbaqalari meduza deb oʻylab yutib yuboradi. Bozorga mato xalta bilan boring."},
+  cup:{cat:"plastik",name:"Bir martalik stakan",fact:"Bir martalik stakan bir necha daqiqa ishlatiladi, lekin tabiatda yuzlab yil qoladi. Koʻp martali idish tanlang."},
+  box:{cat:"qogoz",name:"Karton quti",fact:"Karton qayta ishlanib yangi qutilarga aylanadi. Qutini buklab tashlasangiz, konteynerga koʻproq sigʻadi."},
+  newspaper:{cat:"qogoz",name:"Eski gazeta",fact:"Taxminan 1 tonna qogʻozni qayta ishlash 17 ga yaqin daraxtni kesilishdan saqlab qoladi."},
+  glassBottle:{cat:"shisha",name:"Shisha butilka",fact:"Shisha tabiatda ming yillab saqlanadi, lekin sifatini yoʻqotmay qayta-qayta eritib ishlatilishi mumkin."},
+  jar:{cat:"shisha",name:"Shisha banka",fact:"Shisha bankani yuvib, metall qopqogʻini alohida ajrating. Shunda uni qayta ishlash osonlashadi."},
+  can:{cat:"metall",name:"Alyuminiy banka",fact:"Alyuminiy bankani qayta ishlash yangisini rudadan olishga nisbatan 95% gacha energiyani tejaydi."},
+  tin:{cat:"metall",name:"Konserva qutisi",fact:"Poʻlat konserva qutilari magnit yordamida boshqa chiqindilardan ajratiladi va qayta eritiladi."},
+  apple:{cat:"organik",name:"Olma qoldigʻi",fact:"Meva qoldiqlari kompostda bir necha haftada chirib, tuproqni oʻgʻitlaydi."},
+  banana:{cat:"organik",name:"Banan poʻchogʻi",fact:"Banan poʻchogʻi kompostda oʻsimliklar uchun foydali, kaliyga boy oʻgʻitga aylanadi."},
+  battery:{cat:"xavfli",name:"Batareya",fact:"Batareyada simob, kadmiy va qoʻrgʻoshin kabi ogʻir metallar bor. Ular tuproq va yer osti suvini zaharlaydi."}
+};
+const SPAWN=["bottle","bottle","bag","bag","cup","cup","box","box","newspaper","newspaper","glassBottle","glassBottle","jar","jar","can","can","tin","tin","apple","apple","banana","banana","battery","battery"];
+const TOTAL=SPAWN.length;
+
+/* legend chips */
+$("legend").innerHTML=CAT_ORDER.map(k=>`<div class="chip"><i style="background:${CATS[k].css}"></i><span>${CATS[k].name}</span></div>`).join("");
+
+/* ---------- Renderer / scene ---------- */
+const canvas=$("scene");
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;
+renderer.xr.setReferenceSpaceType("local");
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.05,300);
+camera.rotation.order="YXZ";
+const rig=new THREE.Group();
+rig.add(camera);
+scene.add(rig);
+camera.position.set(0,1.6,0);
+
+const rng=(a,b)=>a+Math.random()*(b-a);
+const C=h=>new THREE.Color(h);
+const PAL={
+  smog:C(0x8e8a7a),sky:C(0x9fd4f2),dirt:C(0x6d6452),grass:C(0x5b9b47),
+  hillD:C(0x6b685c),hillC:C(0x4d8850),lakeD:C(0x55532f),lakeC:C(0x3a9fd6),
+  cloudD:C(0x8b887d),cloudC:C(0xffffff),crownD:C(0x6e604c)
+};
+const tmpC=new THREE.Color();
+function mix(out,a,b,t){return out.copy(a).lerp(b,t);}
+function mat(color,o){return new THREE.MeshStandardMaterial(Object.assign({color,roughness:.75,metalness:0,flatShading:true},o||{}));}
+function mesh(geo,m,x,y,z){const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);return o;}
+
+scene.background=PAL.smog.clone();
+scene.fog=new THREE.Fog(PAL.smog.clone(),6,30);
+const hemi=new THREE.HemisphereLight(0xffffff,0x4a4a3a,.75);scene.add(hemi);
+const sunLight=new THREE.DirectionalLight(0xfff0d0,.5);sunLight.position.set(14,22,6);scene.add(sunLight);
+
+/* ground */
+const groundMat=new THREE.MeshLambertMaterial({color:PAL.dirt.clone()});
+const ground=new THREE.Mesh(new THREE.CircleGeometry(80,48),groundMat);
+ground.rotation.x=-Math.PI/2;scene.add(ground);
+
+/* dirty stains that fade */
+const stains=[];
+for(let i=0;i<14;i++){
+  const m=new THREE.MeshBasicMaterial({color:0x2e2a22,transparent:true,opacity:.45,depthWrite:false});
+  const s=new THREE.Mesh(new THREE.CircleGeometry(rng(.6,1.8),16),m);
+  const a=rng(0,Math.PI*2),r=rng(2,12);
+  s.rotation.x=-Math.PI/2;s.position.set(Math.sin(a)*r,.01+i*.0005,Math.cos(a)*r);s.scale.set(1,rng(.5,1),1);
+  scene.add(s);stains.push(s);
+}
+
+/* distant hills */
+const hills=[];
+for(let i=0;i<18;i++){
+  const a=i/18*Math.PI*2+rng(-.1,.1),r=rng(44,56);
+  const h=new THREE.Mesh(new THREE.ConeGeometry(rng(8,14),rng(5,11),6),mat(PAL.hillD.clone()));
+  h.position.set(Math.sin(a)*r,0,Math.cos(a)*r);h.material.fog=true;
+  h.geometry.translate(0,h.geometry.parameters.height/2,0);
+  scene.add(h);hills.push(h);
+}
+
+/* lake */
+const LAKE={x:-13,z:10,r:5};
+const lakeMat=new THREE.MeshStandardMaterial({color:PAL.lakeD.clone(),roughness:.25,metalness:.1});
+const lake=new THREE.Mesh(new THREE.CircleGeometry(LAKE.r,40),lakeMat);
+lake.rotation.x=-Math.PI/2;lake.position.set(LAKE.x,.03,LAKE.z);scene.add(lake);
+
+/* trees */
+const trees=[];
+const greens=[0x3f8f3a,0x4f9d3e,0x2f7a3a,0x5aa545];
+for(let i=0;i<40;i++){
+  const a=rng(0,Math.PI*2),r=rng(11,30),x=Math.sin(a)*r,z=Math.cos(a)*r;
+  if(Math.hypot(x-LAKE.x,z-LAKE.z)<LAKE.r+1.5) continue;
+  const g=new THREE.Group();
+  const th=rng(1.2,1.8);
+  g.add(mesh(new THREE.CylinderGeometry(.12,.18,th,6),new THREE.MeshLambertMaterial({color:0x5e4330}),0,th/2,0));
+  const crown=mesh(new THREE.IcosahedronGeometry(1,0),mat(PAL.crownD.clone()),0,th+.7,0);
+  g.add(crown);
+  g.position.set(x,0,z);g.scale.setScalar(rng(.8,1.6));g.rotation.y=rng(0,6);
+  scene.add(g);
+  trees.push({crown,clean:C(greens[i%greens.length])});
+}
+
+/* flowers that appear with progress */
+const flowers=[];
+const petal=[0xff7aa8,0xffd84d,0xffffff,0xb58cff,0xff8f4d];
+for(let i=0;i<80;i++){
+  const a=rng(0,Math.PI*2),r=rng(1.8,14);
+  const g=new THREE.Group();
+  g.add(mesh(new THREE.CylinderGeometry(.01,.01,.25,4),new THREE.MeshLambertMaterial({color:0x3c7a2e}),0,.125,0));
+  g.add(mesh(new THREE.IcosahedronGeometry(.06,0),new THREE.MeshLambertMaterial({color:petal[i%petal.length]}),0,.27,0));
+  g.position.set(Math.sin(a)*r,0,Math.cos(a)*r);g.scale.setScalar(.001);
+  scene.add(g);flowers.push({g,thr:rng(.05,.95)});
+}
+
+/* smog particles */
+const SMOG_N=500;
+const smogGeo=new THREE.BufferGeometry();
+const sp=new Float32Array(SMOG_N*3);
+for(let i=0;i<SMOG_N;i++){const a=rng(0,Math.PI*2),r=rng(3,35);sp[i*3]=Math.sin(a)*r;sp[i*3+1]=rng(.5,12);sp[i*3+2]=Math.cos(a)*r;}
+smogGeo.setAttribute("position",new THREE.BufferAttribute(sp,3));
+const smogMat=new THREE.PointsMaterial({color:0x9b9684,size:.45,transparent:true,opacity:.55,depthWrite:false});
+const smog=new THREE.Points(smogGeo,smogMat);scene.add(smog);
+
+/* clouds */
+const clouds=[];
+const cloudMat=new THREE.MeshLambertMaterial({color:PAL.cloudD.clone()});
+for(let i=0;i<9;i++){
+  const g=new THREE.Group();
+  for(let k=0;k<4;k++) g.add(mesh(new THREE.IcosahedronGeometry(rng(1.5,2.6),1),cloudMat,k*1.8-2.7,rng(-.4,.4),rng(-.6,.6)));
+  const a=rng(0,Math.PI*2),r=rng(25,45);
+  g.position.set(Math.sin(a)*r,rng(16,24),Math.cos(a)*r);
+  scene.add(g);clouds.push({g,sp:rng(.2,.5)});
+}
+
+/* sun */
+const sunDisk=new THREE.Mesh(new THREE.SphereGeometry(4,16,12),new THREE.MeshBasicMaterial({color:0xfff1a8,transparent:true,opacity:.25,fog:false}));
+sunDisk.position.set(45,40,-70);scene.add(sunDisk);
+
+/* birds */
+const birds=[];
+const wingGeo=new THREE.BufferGeometry();
+wingGeo.setAttribute("position",new THREE.BufferAttribute(new Float32Array([0,0,-.12,0,0,.12,.45,0,0]),3));
+wingGeo.computeVertexNormals();
+for(let i=0;i<7;i++){
+  const g=new THREE.Group();
+  const bm=new THREE.MeshBasicMaterial({color:0x2a2f35,side:THREE.DoubleSide});
+  const l=new THREE.Mesh(wingGeo,bm),r=new THREE.Mesh(wingGeo,bm);r.scale.x=-1;
+  g.add(l,r);g.visible=false;scene.add(g);
+  birds.push({g,l,r,rad:rng(8,16),h:rng(7,12),sp:rng(.25,.45)*(i%2?1:-1),ph:rng(0,6)});
+}
+
+/* ---------- Canvas-texture helpers ---------- */
+function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+function wrap(g,text,maxW){const words=text.split(" ");const lines=[];let line="";for(const w of words){const t=line?line+" "+w:w;if(g.measureText(t).width>maxW&&line){lines.push(line);line=w;}else line=t;}if(line)lines.push(line);return lines;}
+const F_DISP='"Unbounded","Trebuchet MS",sans-serif',F_BODY='"Manrope","Segoe UI",sans-serif';
+
+/* ---------- Bins ---------- */
+const bins=[];
+function drawBinLabel(b){
+  const c=b.labelCanvas,g=c.getContext("2d"),cat=CATS[b.cat];
+  g.clearRect(0,0,c.width,c.height);
+  g.fillStyle="#ffffff";roundRect(g,6,6,c.width-12,c.height-12,22);g.fill();
+  g.fillStyle=cat.css;roundRect(g,18,18,c.width-36,86,16);g.fill();
+  g.fillStyle=b.cat==="plastik"||b.cat==="metall"?"#14231b":"#ffffff";
+  g.font="700 46px "+F_DISP;g.textAlign="center";g.textBaseline="middle";
+  g.fillText(cat.name.toUpperCase(),c.width/2,62);
+  g.fillStyle="#2a3a31";g.font="600 28px "+F_BODY;
+  g.fillText(cat.ex,c.width/2,140);
+  b.labelTex.needsUpdate=true;
+}
+CAT_ORDER.forEach((k,i)=>{
+  const a=THREE.MathUtils.degToRad(-60+i*24),r=3.3;
+  const g=new THREE.Group();
+  g.position.set(Math.sin(a)*r,0,-Math.cos(a)*r);
+  const bodyMat=mat(CATS[k].color,{flatShading:false,roughness:.55});
+  const lidMat=mat(tmpC.setHex(CATS[k].color).multiplyScalar(.7).getHex(),{flatShading:false,roughness:.5});
+  const body=mesh(new THREE.BoxGeometry(.62,.9,.62),bodyMat,0,.45,0);
+  const lid=mesh(new THREE.BoxGeometry(.68,.07,.68),lidMat,0,.935,0);
+  const slot=mesh(new THREE.BoxGeometry(.42,.02,.12),new THREE.MeshBasicMaterial({color:0x111111}),0,.975,0);
+  g.add(body,lid,slot);
+  const lc=document.createElement("canvas");lc.width=384;lc.height=184;
+  const lt=new THREE.CanvasTexture(lc);
+  const label=mesh(new THREE.PlaneGeometry(.54,.26),new THREE.MeshBasicMaterial({map:lt}),0,.55,.312);
+  g.add(label);
+  g.lookAt(0,0,0);
+  scene.add(g);
+  const b={cat:k,group:g,body,lid,bodyMat,labelCanvas:lc,labelTex:lt,shake:0};
+  g.userData={kind:"bin",ref:b};
+  bins.push(b);drawBinLabel(b);
+});
+
+/* ---------- Scoreboard (readable inside VR) ---------- */
+const boardCanvas=document.createElement("canvas");boardCanvas.width=1040;boardCanvas.height=420;
+const boardTex=new THREE.CanvasTexture(boardCanvas);
+const board=mesh(new THREE.PlaneGeometry(2.6,1.05),new THREE.MeshBasicMaterial({map:boardTex,transparent:true}),0,2.55,-4.7);
+scene.add(board);
+const postMat=new THREE.MeshLambertMaterial({color:0x4b3a2c});
+scene.add(mesh(new THREE.CylinderGeometry(.05,.05,2.1,6),postMat,-1.15,1.05,-4.72));
+scene.add(mesh(new THREE.CylinderGeometry(.05,.05,2.1,6),postMat,1.15,1.05,-4.72));
+
+const restartCanvas=document.createElement("canvas");restartCanvas.width=400;restartCanvas.height=110;
+const restartTex=new THREE.CanvasTexture(restartCanvas);
+const restartMesh=mesh(new THREE.PlaneGeometry(1,.275),new THREE.MeshBasicMaterial({map:restartTex,transparent:true}),0,1.8,-4.66);
+restartMesh.visible=false;restartMesh.userData={kind:"restart",ref:null};scene.add(restartMesh);
+function drawRestart(hover){
+  const g=restartCanvas.getContext("2d");g.clearRect(0,0,400,110);
+  g.fillStyle=hover?"#9cf08a":"#7ddc6a";roundRect(g,4,4,392,102,26);g.fill();
+  g.fillStyle="#0b2012";g.font="700 38px "+F_DISP;g.textAlign="center";g.textBaseline="middle";
+  g.fillText("Qayta oʻynash",200,58);restartTex.needsUpdate=true;
+}
+
+/* ---------- State ---------- */
+let items=[],pickables=[];
+let held=null,heldBy=null;
+let started=false,finished=false;
+let score=0,cleaned=0,wrong=0,correct=0,streak=0,t0=0,tEnd=0;
+let p=0,pv=0;
+let msg={title:"Vazifa",text:"Atrofga 24 ta chiqindi sochilgan. Chiqindini tanlang va uni mos rangli konteynerga soling.",type:"info"};
+const tweens=[];
+
+function drawBoard(){
+  const g=boardCanvas.getContext("2d"),W=1040,H=420;
+  g.clearRect(0,0,W,H);
+  g.fillStyle="rgba(15,34,26,0.93)";roundRect(g,4,4,W-8,H-8,34);g.fill();
+  g.strokeStyle="rgba(125,220,106,0.55)";g.lineWidth=4;roundRect(g,4,4,W-8,H-8,34);g.stroke();
+  g.textBaseline="alphabetic";g.textAlign="left";
+  g.fillStyle="#7ddc6a";g.font="700 40px "+F_DISP;g.fillText("TOZA YER",40,70);
+  g.textAlign="right";g.fillStyle="#eef6ef";g.font="600 32px "+F_BODY;
+  g.fillText(`Ball ${score}    Qoldi ${TOTAL-cleaned}    Xato ${wrong}`,W-40,68);
+  const bx=40,by=96,bw=W-80-110,bh=26,pct=Math.round(p*100);
+  g.fillStyle="#26463a";roundRect(g,bx,by,bw,bh,13);g.fill();
+  if(p>0){const grad=g.createLinearGradient(bx,0,bx+bw,0);grad.addColorStop(0,"#b9a95a");grad.addColorStop(1,"#7ddc6a");g.fillStyle=grad;roundRect(g,bx,by,Math.max(26,bw*p),bh,13);g.fill();}
+  g.textAlign="right";g.fillStyle="#eef6ef";g.font="700 30px "+F_DISP;g.fillText(pct+"%",W-40,by+24);
+  const col={good:"#7ddc6a",bad:"#ff6f61",warn:"#ffb347",info:"#eef6ef"}[msg.type]||"#eef6ef";
+  g.textAlign="left";g.fillStyle=col;g.font="700 36px "+F_BODY;g.fillText(msg.title,40,182);
+  g.fillStyle="#c9dccf";g.font="500 31px "+F_BODY;
+  wrap(g,msg.text,W-80).slice(0,5).forEach((ln,i)=>g.fillText(ln,40,232+i*40));
+  boardTex.needsUpdate=true;
+}
+
+function updateHud(){
+  const pct=Math.round(p*100);
+  $("cleanPct").textContent=pct+"%";$("barFill").style.width=pct+"%";
+  $("score").textContent=score;$("left").textContent=TOTAL-cleaned;$("miss").textContent=wrong;
+  if(held){$("hold").hidden=false;$("holdName").textContent=held.def.name.toLowerCase();}else $("hold").hidden=true;
+  drawBoard();
+}
+function say(title,text,type){
+  msg={title,text,type:type||"info"};
+  $("msgTitle").textContent=title;$("msgText").textContent=text;
+  $("msg").className="msg "+(type||"info");
+  drawBoard();
+}
+
+/* ---------- Trash builders ---------- */
+const BUILD={
+  bottle(){const g=new THREE.Group(),m=mat(0xa6dcf7,{transparent:true,opacity:.78,roughness:.2});
+    g.add(mesh(new THREE.CylinderGeometry(.07,.07,.26,10),m,0,.13,0));
+    g.add(mesh(new THREE.CylinderGeometry(.03,.068,.08,10),m,0,.3,0));
+    g.add(mesh(new THREE.CylinderGeometry(.033,.033,.035,10),mat(0x2f6fd6),0,.355,0));
+    g.add(mesh(new THREE.CylinderGeometry(.073,.073,.08,10),mat(0x2fa9e0),0,.14,0));
+    g.rotation.z=Math.PI/2;return g;},
+  bag(){const geo=new THREE.IcosahedronGeometry(.17,1),ps=geo.attributes.position;
+    for(let i=0;i<ps.count;i++){const x=ps.getX(i),y=ps.getY(i),z=ps.getZ(i),f=1+.3*Math.sin(x*31+y*17)*Math.cos(z*23+x*11);ps.setXYZ(i,x*f,y*f*.55,z*f);}
+    geo.computeVertexNormals();const g=new THREE.Group();g.add(mesh(geo,mat(0xf2f2ec,{transparent:true,opacity:.92}),0,0,0));return g;},
+  cup(){const g=new THREE.Group(),m=mat(0xfafafa,{side:THREE.DoubleSide});
+    g.add(mesh(new THREE.CylinderGeometry(.078,.052,.16,14,1,true),m,0,.08,0));
+    g.add(mesh(new THREE.CylinderGeometry(.08,.08,.03,14,1,true),mat(0xe0473f,{side:THREE.DoubleSide}),0,.13,0));
+    g.rotation.z=Math.PI/2*.92;return g;},
+  box(){const g=new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(.34,.22,.26),mat(0xb88a55),0,.11,0));
+    g.add(mesh(new THREE.BoxGeometry(.346,.226,.05),mat(0xdcc690),0,.11,0));
+    g.rotation.set(rng(-.1,.1),0,rng(-.12,.12));return g;},
+  newspaper(){const g=new THREE.Group();
+    g.add(mesh(new THREE.BoxGeometry(.36,.03,.27),mat(0xe8e4d8),0,.015,0));
+    for(let k=0;k<4;k++) g.add(mesh(new THREE.BoxGeometry(.28,.032,.018),mat(0x55524a),0,.016,-.08+k*.05));
+    g.add(mesh(new THREE.BoxGeometry(.14,.033,.06),mat(0x8a3b35),-.06,.017,.09));
+    g.rotation.x=rng(-.08,.08);return g;},
+  glassBottle(){const g=new THREE.Group(),m=mat(0x2e7d4a,{transparent:true,opacity:.82,roughness:.1});
+    g.add(mesh(new THREE.CylinderGeometry(.065,.065,.24,10),m,0,.12,0));
+    g.add(mesh(new THREE.CylinderGeometry(.028,.065,.07,10),m,0,.275,0));
+    g.add(mesh(new THREE.CylinderGeometry(.028,.028,.08,10),m,0,.35,0));
+    g.rotation.z=Math.PI/2;return g;},
+  jar(){const g=new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(.08,.08,.17,12),mat(0xbfe6c8,{transparent:true,opacity:.6,roughness:.1}),0,.085,0));
+    g.add(mesh(new THREE.CylinderGeometry(.083,.083,.035,12),mat(0xb8bec4,{metalness:.6,roughness:.35}),0,.185,0));
+    g.rotation.z=rng(-.2,.2);return g;},
+  can(){const g=new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(.052,.052,.16,12),mat(0xc9ced3,{metalness:.7,roughness:.3}),0,0,0));
+    g.add(mesh(new THREE.CylinderGeometry(.054,.054,.08,12),mat(0xd23b3b,{metalness:.3,roughness:.4}),0,0,0));
+    g.scale.set(1,.8,1);g.rotation.z=Math.PI/2;return g;},
+  tin(){const g=new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(.07,.07,.12,14),mat(0xbfc5ca,{metalness:.7,roughness:.35}),0,.06,0));
+    g.add(mesh(new THREE.CylinderGeometry(.072,.072,.08,14),mat(0xe0892f),0,.06,0));
+    return g;},
+  apple(){const g=new THREE.Group();
+    const a=mesh(new THREE.SphereGeometry(.075,8,6),mat(0xa9472f),0,.065,0);a.scale.set(1,.85,.7);g.add(a);
+    g.add(mesh(new THREE.CylinderGeometry(.045,.045,.06,8),mat(0xe8d8a8),0,.065,0));
+    g.add(mesh(new THREE.CylinderGeometry(.006,.006,.05,4),mat(0x5a3b22),0,.14,0));
+    return g;},
+  banana(){const g=new THREE.Group();
+    const b=mesh(new THREE.TorusGeometry(.11,.028,6,12,Math.PI*.9),mat(0xd8b23a),0,0,0);b.rotation.x=Math.PI/2;g.add(b);
+    g.add(mesh(new THREE.SphereGeometry(.03,6,4),mat(0x5c4a2a),.11,0,0));
+    return g;},
+  battery(){const g=new THREE.Group();
+    g.add(mesh(new THREE.CylinderGeometry(.036,.036,.16,12),mat(0x222428,{roughness:.4}),0,0,0));
+    g.add(mesh(new THREE.CylinderGeometry(.037,.037,.05,12),mat(0xc9772c,{metalness:.5,roughness:.35}),0,.055,0));
+    g.add(mesh(new THREE.CylinderGeometry(.012,.012,.02,8),mat(0xb0b0b0,{metalness:.8}),0,.09,0));
+    g.rotation.z=Math.PI/2;return g;}
+};
+
+const ringGeo=new THREE.RingGeometry(.3,.37,28);
+function spawnItems(){
+  items.forEach(it=>{scene.remove(it.ring);if(it.group.parent)it.group.parent.remove(it.group);});
+  items=[];
+  const spots=[];
+  SPAWN.slice().sort(()=>Math.random()-.5).forEach(key=>{
+    let x=0,z=0,ok=false,tries=0;
+    do{
+      const a=rng(0,Math.PI*2),r=rng(2,9.2);x=Math.sin(a)*r;z=-Math.cos(a)*r;
+      ok=bins.every(b=>Math.hypot(b.group.position.x-x,b.group.position.z-z)>1.1)&&spots.every(s=>Math.hypot(s[0]-x,s[1]-z)>1)&&Math.abs(z+4.7)+Math.abs(x)*.5>1.2;
+    }while(!ok&&++tries<80);
+    spots.push([x,z]);
+    const def=ITEMS[key];
+    const inner=BUILD[key]();
+    const g=new THREE.Group();g.add(inner);
+    g.scale.setScalar(1.6);g.rotation.y=rng(0,Math.PI*2);g.position.set(x,0,z);
+    g.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(g);
+    g.position.y=-box.min.y+.005;
+    const hb=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),new THREE.MeshBasicMaterial({visible:false}));
+    hb.position.y=.05;g.add(hb);
+    const ring=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xd9ffb8,transparent:true,opacity:.3,depthWrite:false,side:THREE.DoubleSide}));
+    ring.rotation.x=-Math.PI/2;ring.position.set(x,.02,z);scene.add(ring);
+    const it={key,def,group:g,ring,phase:rng(0,6)};
+    g.userData={kind:"item",ref:it};
+    scene.add(g);items.push(it);
+  });
+  rebuildPickables();
+}
+function rebuildPickables(){
+  pickables=bins.map(b=>b.group).concat(items.filter(it=>it!==held&&it.group.parent===scene&&!it.gone).map(it=>it.group));
+  pickables.push(restartMesh);
+}
+
+/* ---------- Audio ---------- */
+let actx=null;
+function ensureAudio(){try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")actx.resume();}catch(e){actx=null;}}
+function tone(freqs,type,dur){
+  if(!actx)return;
+  freqs.forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime+i*.09;
+    o.type=type;o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.12,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+    o.connect(g).connect(actx.destination);o.start(t);o.stop(t+dur+.02);});
+}
+
+/* ---------- Game actions ---------- */
+function holdOffset(holder){
+  if(holder===camera) return stereo?new THREE.Vector3(0,-.32,-.9):new THREE.Vector3(.34,-.26,-.85);
+  return holder.userData.mode==="tracked-pointer"?new THREE.Vector3(0,0,-.22):new THREE.Vector3(0,-.28,-.85);
+}
+function pick(it,holder){
+  held=it;heldBy=holder;
+  it.ring.visible=false;
+  holder.add(it.group);
+  it.group.position.copy(holdOffset(holder));
+  it.group.rotation.set(0,0,0);
+  it.group.scale.setScalar(holder===camera?.5:1.1);
+  rebuildPickables();
+  tone([520],"sine",.12);
+  say(it.def.name,"Buni qaysi konteynerga solasiz? Konteyner ustidagi yozuvga qarang.","info");
+  updateHud();
+}
+function deposit(bin){
+  const it=held,def=it.def;
+  if(def.cat===bin.cat){
+    held=null;heldBy=null;it.gone=true;
+    scene.attach(it.group);
+    const from=it.group.position.clone(),to=bin.group.position.clone().add(new THREE.Vector3(0,1.15,0));
+    const s0=it.group.scale.x;let t=0;
+    bin.lidOpen=1;
+    tweens.push(dt=>{t+=dt/.55;const k=Math.min(1,t),e=1-Math.pow(1-k,3);
+      it.group.position.lerpVectors(from,to,e);it.group.position.y+=Math.sin(k*Math.PI)*.4;
+      it.group.scale.setScalar(s0*(1-.85*e));it.group.rotation.y+=dt*6;
+      if(k>=1){scene.remove(it.group);return true;}return false;});
+    cleaned++;correct++;streak=Math.min(streak+1,5);
+    const pts=10+(streak-1)*2;score+=pts;p=cleaned/TOTAL;
+    tone([660,880],"triangle",.22);
+    say(`Toʻgʻri! +${pts} ball`,def.fact,"good");
+    rebuildPickables();updateHud();
+    if(cleaned===TOTAL) setTimeout(finish,900);
+  }else{
+    wrong++;streak=0;score=Math.max(0,score-3);
+    bin.shake=.45;
+    tone([220,170],"sawtooth",.25);
+    say("Notoʻgʻri konteyner",`${def.name} ${CATS[def.cat].name.toLowerCase()} chiqindiga kiradi. ${CATS[def.cat].rule}`,"bad");
+    updateHud();
+  }
+}
+function act(target,holder){
+  if(!target)return;
+  const k=target.userData.kind;
+  if(k==="restart"){if(finished)restart();return;}
+  if(!started)startGame();
+  if(finished)return;
+  if(k==="item"){
+    if(held){say("Qoʻlingiz band",`Avval ${held.def.name.toLowerCase()}ni konteynerga soling.`,"warn");tone([300],"square",.1);return;}
+    pick(target.userData.ref,holder);
+  }else if(k==="bin"){
+    const b=target.userData.ref;
+    if(!held){say(`${CATS[b.cat].name} konteyneri`,CATS[b.cat].rule+" Avval yerdan chiqindi toping.","info");return;}
+    deposit(b);
+  }
+}
+function finish(){
+  finished=true;tEnd=performance.now();
+  const secs=Math.round((tEnd-t0)/1000),mm=Math.floor(secs/60),ss=String(secs%60).padStart(2,"0");
+  const acc=Math.round(correct/Math.max(1,correct+wrong)*100);
+  $("rScore").textContent=score;$("rAcc").textContent=acc+"%";$("rTime").textContent=`${mm}:${ss}`;
+  say("Yer yuzi toza!",`Ball: ${score}. Aniqlik: ${acc}%. Vaqt: ${mm}:${ss}. Qayta oʻynash uchun pastdagi tugmani bosing.`,"good");
+  restartMesh.visible=true;drawRestart(false);
+  tone([523,659,784,1046],"triangle",.35);
+  if(!renderer.xr.isPresenting) $("endOv").hidden=false;
+}
+function restart(){
+  if(held){held=null;heldBy=null;}
+  score=0;cleaned=0;wrong=0;correct=0;streak=0;p=0;finished=false;
+  restartMesh.visible=false;$("endOv").hidden=true;
+  spawnItems();
+  t0=performance.now();started=true;
+  say("Yangi oʻyin","Chiqindilar yana sochildi. Ularni tezroq va xatosiz saralashga harakat qiling.","info");
+  updateHud();
+}
+function startGame(){
+  if(started)return;
+  started=true;t0=performance.now();ensureAudio();
+  $("startOv").hidden=true;
+  say("Boshladik!","Atrofga qarang va birinchi chiqindini tanlang. Orqangizda ham chiqindilar bor.","info");
+}
+
+/* ---------- Hover highlight ---------- */
+let hoverSet=new Set();
+function setHighlight(o,on){
+  const k=o.userData.kind;
+  if(k==="item"){const it=o.userData.ref;it.ring.material.opacity=on?.95:.3;it.hover=on;}
+  else if(k==="bin"){o.userData.ref.bodyMat.emissive.setHex(on?0x2a2a2a:0);o.userData.ref.hover=on;}
+  else if(k==="restart"){drawRestart(on);}
+}
+function applyHover(newSet){
+  hoverSet.forEach(o=>{if(!newSet.has(o))setHighlight(o,false);});
+  newSet.forEach(o=>{if(!hoverSet.has(o))setHighlight(o,true);});
+  hoverSet=newSet;
+}
+const raycaster=new THREE.Raycaster();
+function hitTest(){
+  const hits=raycaster.intersectObjects(pickables,true);
+  for(const h of hits){let o=h.object;while(o&&!o.userData.kind)o=o.parent;if(!o)continue;if(o.userData.kind==="restart"&&!o.visible)continue;return{obj:o,dist:h.distance};}
+  return null;
+}
+
+/* ---------- Desktop / touch controls ---------- */
+let yaw=0,pitch=-.12;
+const ptr={down:false,x:0,y:0,moved:0,id:null};
+const ndc=new THREE.Vector2();
+let mouseHover=null;
+function pointerTarget(e){
+  const r=canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+  raycaster.setFromCamera(ndc,camera);
+  const h=hitTest();return h?h.obj:null;
+}
+canvas.addEventListener("pointerdown",e=>{ptr.down=true;ptr.x=e.clientX;ptr.y=e.clientY;ptr.moved=0;ptr.id=e.pointerId;try{canvas.setPointerCapture(e.pointerId);}catch(_){}});
+canvas.addEventListener("pointermove",e=>{
+  if(renderer.xr.isPresenting)return;
+  if(ptr.down&&e.pointerId===ptr.id){
+    const dx=e.clientX-ptr.x,dy=e.clientY-ptr.y;ptr.x=e.clientX;ptr.y=e.clientY;ptr.moved+=Math.abs(dx)+Math.abs(dy);
+    if(ptr.moved>6&&!(stereo&&orientActive)){const s=e.pointerType==="touch"?.006:.004;yaw+=dx*s;pitch=Math.max(-1.2,Math.min(1.1,pitch+dy*s));}
+  }else if(e.pointerType==="mouse"&&!stereo){
+    const t=pointerTarget(e);mouseHover=t;canvas.classList.toggle("pointing",!!t);
+    applyHover(t?new Set([t]):new Set());
+  }
+});
+canvas.addEventListener("pointerup",e=>{
+  if(!ptr.down)return;ptr.down=false;
+  if(renderer.xr.isPresenting)return;
+  if(ptr.moved<=8){if(stereo){stereoTap();return;}const t=pointerTarget(e);if(t)act(t,camera);}
+});
+canvas.addEventListener("pointercancel",()=>{ptr.down=false;});
+const keys={};
+addEventListener("keydown",e=>{keys[e.key]=true;});
+addEventListener("keyup",e=>{keys[e.key]=false;});
+
+/* ---------- WebXR ---------- */
+const controllers=[];
+const tmpM=new THREE.Matrix4();
+const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1)]);
+for(let i=0;i<2;i++){
+  const c=renderer.xr.getController(i);
+  c.userData={mode:null,line:null,reticle:null,fill:null,dwellT:0,dwellTarget:null,dwellLock:null,hit:null};
+  c.addEventListener("connected",e=>{
+    c.userData.mode=e.data.targetRayMode;
+    if(e.data.targetRayMode==="tracked-pointer"){
+      const l=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd9ffb8}));l.scale.z=5;c.add(l);c.userData.line=l;
+    }else{
+      const ret=new THREE.Mesh(new THREE.RingGeometry(.012,.02,24),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true}));
+      ret.position.z=-1.2;ret.renderOrder=10;c.add(ret);c.userData.reticle=ret;
+      const fill=new THREE.Mesh(new THREE.CircleGeometry(.011,24),new THREE.MeshBasicMaterial({color:0x7ddc6a,depthTest:false,transparent:true}));
+      fill.position.z=-1.199;fill.scale.setScalar(.001);fill.renderOrder=11;c.add(fill);c.userData.fill=fill;
+    }
+  });
+  c.addEventListener("disconnected",()=>{
+    if(held&&heldBy===c){camera.add(held.group);held.group.position.copy(holdOffset(camera));heldBy=camera;}
+    if(c.userData.line){c.remove(c.userData.line);c.userData.line=null;}
+    if(c.userData.reticle){c.remove(c.userData.reticle,c.userData.fill);c.userData.reticle=null;c.userData.fill=null;}
+    c.userData.mode=null;
+  });
+  c.addEventListener("select",()=>{ensureAudio();const h=c.userData.hit;if(h){act(h,c);c.userData.dwellLock=h;c.userData.dwellT=0;}});
+  rig.add(c);controllers.push(c);
+}
+function castFrom(c){
+  tmpM.identity().extractRotation(c.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(c.matrixWorld);
+  raycaster.ray.direction.set(0,0,-1).applyMatrix4(tmpM);
+  return hitTest();
+}
+function xrFrame(dt){
+  const set=new Set();
+  controllers.forEach(c=>{
+    if(!c.userData.mode)return;
+    const h=castFrom(c);c.userData.hit=h?h.obj:null;
+    if(h)set.add(h.obj);
+    if(c.userData.line)c.userData.line.scale.z=h?h.dist:5;
+    if(c.userData.reticle){
+      const d=h?Math.max(.4,h.dist-.02):1.2;
+      c.userData.reticle.position.z=-d;c.userData.fill.position.z=-d+.001;
+      const sc=d/1.2;c.userData.reticle.scale.setScalar(sc);
+      /* gaze dwell selection for Cardboard without a button */
+      const tgt=h?h.obj:null;
+      if(tgt!==c.userData.dwellLock)c.userData.dwellLock=null;
+      if(tgt&&tgt!==c.userData.dwellLock){
+        if(tgt===c.userData.dwellTarget)c.userData.dwellT+=dt;else{c.userData.dwellTarget=tgt;c.userData.dwellT=0;}
+        const k=Math.min(1,c.userData.dwellT/1.5);
+        c.userData.fill.scale.setScalar(Math.max(.001,k)*sc);
+        if(k>=1){act(tgt,c);c.userData.dwellLock=tgt;c.userData.dwellT=0;}
+      }else{c.userData.dwellT=0;c.userData.dwellTarget=tgt;c.userData.fill.scale.setScalar(.001);}
+    }
+  });
+  applyHover(set);
+}
+renderer.xr.addEventListener("sessionstart",()=>{
+  rig.position.y=1.6;
+  if(held&&heldBy===camera){const c=controllers.find(x=>x.userData.mode)||controllers[0];c.add(held.group);held.group.position.copy(holdOffset(c));heldBy=c;}
+  applyHover(new Set());
+});
+renderer.xr.addEventListener("sessionend",()=>{
+  rig.position.y=0;camera.position.set(0,1.6,0);
+  if(held&&heldBy!==camera){camera.add(held.group);held.group.position.copy(holdOffset(camera));held.group.scale.setScalar(.5);heldBy=camera;}
+  applyHover(new Set());
+  if(finished)$("endOv").hidden=false;
+});
+
+const vrBtn=$("vrBtn");
+if(navigator.xr&&navigator.xr.isSessionSupported){
+  navigator.xr.isSessionSupported("immersive-vr").then(ok=>{if(ok){vrBtn.hidden=false;$("startVr").hidden=false;}}).catch(()=>{});
+}
+let xrSession=null;
+vrBtn.addEventListener("click",()=>{
+  if(xrSession){xrSession.end();return;}
+  ensureAudio();
+  if(stereo)exitStereo();
+  navigator.xr.requestSession("immersive-vr",{optionalFeatures:["local-floor"]}).then(s=>{
+    xrSession=s;vrBtn.textContent="VR dan chiqish";
+    s.addEventListener("end",()=>{xrSession=null;vrBtn.textContent="VR shlem";});
+    startGame();$("startOv").hidden=true;
+    return renderer.xr.setSession(s);
+  }).catch(()=>{say("VR ochilmadi","Qurilma VR sessiyasini ochishga ruxsat bermadi. «Cardboard VR» yoki 3D rejimda davom eting.","warn");});
+});
+
+/* ---------- Cardboard stereo mode (no WebXR needed) ---------- */
+let stereo=false,orientActive=false,needCalib=true,yawOffset=0,wentFullscreen=false,lastEmptyTap=0;
+const eyeL=new THREE.PerspectiveCamera(85,1,.05,300),eyeR=new THREE.PerspectiveCamera(85,1,.05,300);
+eyeL.position.x=-.032;eyeR.position.x=.032;camera.add(eyeL,eyeR);
+const gazeRet=new THREE.Mesh(new THREE.RingGeometry(.012,.02,24),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true}));
+gazeRet.position.z=-1.2;gazeRet.renderOrder=20;gazeRet.visible=false;camera.add(gazeRet);
+const gazeFill=new THREE.Mesh(new THREE.CircleGeometry(.011,24),new THREE.MeshBasicMaterial({color:0x7ddc6a,depthTest:false,transparent:true}));
+gazeFill.position.z=-1.199;gazeFill.renderOrder=21;gazeFill.scale.setScalar(.001);gazeFill.visible=false;camera.add(gazeFill);
+const gaze={hit:null,t:0,target:null,lock:null};
+const devQ=new THREE.Quaternion(),q0=new THREE.Quaternion(),q1=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)),qYaw=new THREE.Quaternion();
+const zee=new THREE.Vector3(0,0,1),yAxis=new THREE.Vector3(0,1,0),eul=new THREE.Euler(),eul2=new THREE.Euler();
+function screenAngle(){let a=(screen.orientation&&typeof screen.orientation.angle==="number")?screen.orientation.angle:(window.orientation||0);if(a===0&&innerWidth>innerHeight)a=90;return THREE.MathUtils.degToRad(a);}
+function onOrient(e){
+  if(e.alpha==null||e.beta==null||e.gamma==null)return;
+  orientActive=true;
+  const d=THREE.MathUtils.degToRad;
+  eul.set(d(e.beta),d(e.alpha),-d(e.gamma),"YXZ");
+  devQ.setFromEuler(eul);devQ.multiply(q1);devQ.multiply(q0.setFromAxisAngle(zee,-screenAngle()));
+  if(needCalib){eul2.setFromQuaternion(devQ,"YXZ");yawOffset=yaw-eul2.y;needCalib=false;}
+}
+function sizeEyes(){const a=(innerWidth/2)/innerHeight;eyeL.aspect=eyeR.aspect=a;eyeL.updateProjectionMatrix();eyeR.updateProjectionMatrix();}
+async function enterStereo(){
+  ensureAudio();startGame();$("startOv").hidden=true;$("endOv").hidden=true;
+  try{if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){await DeviceOrientationEvent.requestPermission();}}catch(_){}
+  addEventListener("deviceorientation",onOrient);
+  try{if(document.documentElement.requestFullscreen&&!document.fullscreenElement){await document.documentElement.requestFullscreen({navigationUI:"hide"});wentFullscreen=true;}}catch(_){wentFullscreen=false;}
+  try{if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock("landscape");}catch(_){}
+  stereo=true;yaw=0;pitch=0;needCalib=true;
+  document.body.classList.add("stereo");$("stereoUi").hidden=false;
+  gazeRet.visible=gazeFill.visible=true;
+  if(held&&heldBy===camera)held.group.position.copy(holdOffset(camera));
+  applyHover(new Set());sizeEyes();
+  say("Cardboard rejimi","Boshingizni burib qarang. Nishonni chiqindiga qaratib 1,5 soniya ushlab turing yoki ekranga bosing. Soʻng mos konteynerga qarang.","info");
+  setTimeout(()=>{if(stereo&&!orientActive)say("Giroskop sezilmadi","Telefon harakati sezilmayapti: ekranni barmoq bilan surib qarang. Toʻliq VR uchun ilovani HTTPS saytdan oching.","warn");},1800);
+}
+function exitStereo(){
+  if(!stereo)return;
+  stereo=false;removeEventListener("deviceorientation",onOrient);
+  eul2.setFromQuaternion(camera.quaternion,"YXZ");yaw=eul2.y;pitch=Math.max(-1.2,Math.min(1.1,eul2.x));
+  document.body.classList.remove("stereo");$("stereoUi").hidden=true;
+  gazeRet.visible=gazeFill.visible=false;
+  if(held&&heldBy===camera)held.group.position.copy(holdOffset(camera));
+  try{if(screen.orientation&&screen.orientation.unlock)screen.orientation.unlock();}catch(_){}
+  if(wentFullscreen&&document.fullscreenElement){wentFullscreen=false;document.exitFullscreen().catch(()=>{});}
+  applyHover(new Set());
+  renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);
+  if(finished)$("endOv").hidden=false;
+}
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stereo&&wentFullscreen){wentFullscreen=false;exitStereo();}});
+function stereoTap(){
+  ensureAudio();
+  if(gaze.hit){act(gaze.hit,camera);gaze.lock=gaze.hit;gaze.t=0;return;}
+  const now=performance.now();
+  if(now-lastEmptyTap<400){yaw=0;pitch=0;needCalib=true;lastEmptyTap=0;tone([440,660],"sine",.12);}
+  else lastEmptyTap=now;
+}
+function gazeFrame(dt){
+  rig.updateMatrixWorld(true);
+  raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+  raycaster.ray.direction.set(0,0,-1).transformDirection(camera.matrixWorld);
+  const h=hitTest(),tgt=h?h.obj:null;gaze.hit=tgt;
+  applyHover(tgt?new Set([tgt]):new Set());
+  const d=h?Math.max(.4,h.dist-.02):1.2,sc=d/1.2;
+  gazeRet.position.z=-d;gazeFill.position.z=-d+.001;gazeRet.scale.setScalar(sc);
+  if(tgt!==gaze.lock)gaze.lock=null;
+  if(tgt&&tgt!==gaze.lock){
+    if(tgt===gaze.target)gaze.t+=dt;else{gaze.target=tgt;gaze.t=0;}
+    const k=Math.min(1,gaze.t/1.5);gazeFill.scale.setScalar(Math.max(.001,k)*sc);
+    if(k>=1){act(tgt,camera);gaze.lock=tgt;gaze.t=0;}
+  }else{gaze.t=0;gaze.target=tgt;gazeFill.scale.setScalar(.001);}
+}
+function renderFrame(){
+  if(stereo&&!renderer.xr.isPresenting){
+    const w=innerWidth,h=innerHeight;
+    renderer.setScissorTest(true);
+    renderer.setViewport(0,0,w/2,h);renderer.setScissor(0,0,w/2,h);renderer.render(scene,eyeL);
+    renderer.setViewport(w/2,0,w/2,h);renderer.setScissor(w/2,0,w/2,h);renderer.render(scene,eyeR);
+    renderer.setScissorTest(false);
+  }else renderer.render(scene,camera);
+}
+$("cardBtn").addEventListener("click",()=>{enterStereo();});
+$("startCard").addEventListener("click",()=>{enterStereo();});
+$("startVr").addEventListener("click",()=>{vrBtn.click();});
+$("exitStereo").addEventListener("click",exitStereo);
+addEventListener("keydown",e=>{if(e.key==="Escape"&&stereo)exitStereo();});
+
+/* ---------- UI buttons ---------- */
+$("startBtn").addEventListener("click",()=>{startGame();canvas.focus();});
+$("helpBtn").addEventListener("click",()=>{$("startOv").hidden=false;$("startBtn").textContent=started?"Davom etish":"Boshlash (3D)";});
+$("startBtn").addEventListener("click",()=>{$("startOv").hidden=true;});
+$("againBtn").addEventListener("click",()=>{restart();canvas.focus();});
+addEventListener("resize",()=>{if(renderer.xr.isPresenting)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);sizeEyes();});
+
+/* ---------- World update ---------- */
+function updateWorld(v,time){
+  mix(scene.background,PAL.smog,PAL.sky,v);
+  scene.fog.color.copy(scene.background);
+  scene.fog.near=6+14*v;scene.fog.far=30+60*v;
+  hemi.intensity=.7+.35*v;sunLight.intensity=.45+.6*v;
+  mix(groundMat.color,PAL.dirt,PAL.grass,v);
+  hills.forEach(h=>mix(h.material.color,PAL.hillD,PAL.hillC,v));
+  mix(lakeMat.color,PAL.lakeD,PAL.lakeC,v);
+  stains.forEach(s=>s.material.opacity=.45*(1-v));
+  trees.forEach(t=>{mix(t.crown.material.color,PAL.crownD,t.clean,v);t.crown.scale.setScalar(.5+.6*v);});
+  flowers.forEach(f=>{const k=Math.max(.001,Math.min(1,(v-f.thr)*6));f.g.scale.setScalar(k);});
+  smogMat.opacity=.55*(1-v);
+  mix(cloudMat.color,PAL.cloudD,PAL.cloudC,v);
+  sunDisk.material.opacity=.25+.75*v;
+}
+
+let last=performance.now();
+renderer.setAnimationLoop(()=>{
+  const now=performance.now(),dt=Math.min(.05,(now-last)/1000),time=now/1000;last=now;
+  pv+=(p-pv)*Math.min(1,dt*1.4);
+  updateWorld(pv,time);
+
+  if(!renderer.xr.isPresenting){
+    if(keys.ArrowLeft||keys.a||keys.A)yaw+=dt*1.6;
+    if(keys.ArrowRight||keys.d||keys.D)yaw-=dt*1.6;
+    if(keys.ArrowUp)pitch=Math.min(1.1,pitch+dt);
+    if(keys.ArrowDown)pitch=Math.max(-1.2,pitch-dt);
+    if(!started&&!reduceMotion)yaw+=dt*.05;
+    if(stereo&&orientActive){qYaw.setFromAxisAngle(yAxis,yawOffset);camera.quaternion.copy(qYaw).multiply(devQ);}
+    else camera.rotation.set(pitch,yaw,0);
+    if(stereo)gazeFrame(dt);
+  }else xrFrame(dt);
+
+  /* trash sparkle + held item spin */
+  items.forEach(it=>{if(it!==held&&!it.gone){const s=it.hover?1.12:1;it.group.scale.setScalar(1.6*s);it.ring.scale.setScalar(1+.08*Math.sin(time*3+it.phase));}});
+  if(held)held.group.rotation.y+=dt*1.2;
+
+  /* bins: lid bounce, shake */
+  bins.forEach(b=>{
+    b.lidOpen=Math.max(0,(b.lidOpen||0)-dt*2);
+    b.lid.position.y=.935+b.lidOpen*.12;b.lid.rotation.x=-b.lidOpen*.5;
+    if(b.shake>0){b.shake-=dt;b.body.position.x=Math.sin(time*60)*.03*(b.shake/.45);}else b.body.position.x=0;
+  });
+
+  for(let i=tweens.length-1;i>=0;i--)if(tweens[i](dt))tweens.splice(i,1);
+
+  /* ambient life */
+  smog.rotation.y+=dt*.01;
+  clouds.forEach(c=>{c.g.position.x+=dt*c.sp;if(c.g.position.x>50)c.g.position.x=-50;});
+  birds.forEach(b=>{
+    b.g.visible=pv>.55;
+    if(!b.g.visible)return;
+    const a=time*b.sp+b.ph;
+    b.g.position.set(Math.cos(a)*b.rad,b.h+Math.sin(a*2)*.5,Math.sin(a)*b.rad);
+    b.g.rotation.y=-a+(b.sp>0?0:Math.PI);
+    const f=reduceMotion?.2:Math.sin(time*9+b.ph)*.6;b.l.rotation.z=f;b.r.rotation.z=-f;
+  });
+  lake.material.roughness=.25+.05*Math.sin(time);
+
+  renderFrame();
+});
+
+/* ---------- Boot ---------- */
+spawnItems();
+updateHud();
+drawRestart(false);
+if(document.fonts&&document.fonts.ready){
+  Promise.all([document.fonts.load('700 40px "Unbounded"'),document.fonts.load('600 30px "Manrope"')]).catch(()=>{}).then(()=>{bins.forEach(drawBinLabel);drawBoard();drawRestart(false);});
+}
+})();
+</script>
+
+</body>
+</html>
