@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1c2220">
+<meta name="description" content="Ekologik vaziyat XR — zavod tutunini filtrlar bilan zararsizlantiring, suvni tozalang, daraxt eking. Brauzerda, VR shlemda va telefonda AR/VR rejimida ishlaydi.">
+<title>Ekologik vaziyat — XR</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --soot: #3b3432;
+    --moss: #2f7d4f;
+    --leaf: #7fd18b;
+    --river: #3a9ad9;
+    --ember: #e9836f;
+    --sand: #e8c26a;
+    --ink: #f4f7f2;
+    --muted: rgba(244, 247, 242, .72);
+    --panel: rgba(20, 28, 24, 0.66);
+    --panel-solid: #18201c;
+    --line: rgba(255, 255, 255, .12);
+    box-sizing: border-box;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+  html { height: 100%; }
+  body {
+    height: 100%; margin: 0; overflow: hidden;
+    background: #1c2220; color: var(--ink);
+    font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+  }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 3px; }
+
+  #camfeed { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; z-index: 0; background: #000; }
+  body[data-mode="camar"] #camfeed { display: block; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; z-index: 1; outline: none; }
+  body[data-mode="orbit"] #scene { cursor: grab; }
+  body[data-mode="orbit"] #scene.hovering, body[data-mode="camar"] #scene.hovering { cursor: pointer; }
+
+  #ui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #ui > * { pointer-events: auto; }
+
+  .glass { background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); box-shadow: 0 14px 40px rgba(0,0,0,.35); }
+
+  /* ---------- top-left: title + air meter ---------- */
+  .top {
+    position: fixed; left: 16px; top: calc(env(safe-area-inset-top, 0px) + 14px);
+    width: min(330px, calc(100% - 32px)); border-radius: 20px; padding: 14px 16px 12px;
+  }
+  .top h1 { margin: 0; font-family: "Unbounded", "Arial Black", system-ui, sans-serif; font-weight: 700; font-size: 21px; line-height: 1.1; letter-spacing: -.01em; }
+  .top .mode { margin: 3px 0 10px; font-size: 13px; color: var(--muted); }
+  .meter-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+  .meter-row b { font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 15px; transition: color .4s; }
+  .bar { position: relative; height: 10px; border-radius: 10px; margin: 7px 0 6px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .bar i { position: absolute; inset: 0 auto 0 0; width: 0%; border-radius: 10px; background: linear-gradient(90deg, #6b5a4e, #a08a5c 40%, var(--moss) 72%, var(--leaf)); transition: width .8s ease; }
+  .meter-row.small { font-size: 12.5px; color: var(--muted); }
+
+  /* ---------- tasks ---------- */
+  .tasks { position: fixed; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 14px); width: 300px; border-radius: 20px; padding: 8px; }
+  .tasks-toggle { display: none; width: 100%; background: none; border: 0; padding: 8px 10px; text-align: left; font-family: "Unbounded", system-ui, sans-serif; font-size: 14px; cursor: pointer; }
+  .tasks h2 { margin: 6px 10px 6px; font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 14px; }
+  .tasks ul { list-style: none; margin: 0; padding: 0; }
+  .task { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 14px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+  .task:hover { background: rgba(255,255,255,.07); }
+  .task .ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-size: 18px; background: rgba(255,255,255,.08); }
+  .task .tx { font-size: 13.5px; line-height: 1.3; }
+  .task .tx small { display: block; color: var(--muted); font-size: 12px; }
+  .task .ct { font-family: "Unbounded", system-ui, sans-serif; font-size: 13px; color: var(--sand); }
+  .task.done .ct { color: var(--leaf); }
+  .task.done .ic { background: rgba(127, 209, 139, .22); }
+  .tasks .note { margin: 6px 10px 6px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+  /* ---------- dock ---------- */
+  .dock {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    display: flex; gap: 4px; padding: 5px; border-radius: 18px; max-width: calc(100% - 20px); overflow-x: auto; scrollbar-width: none;
+  }
+  .dock::-webkit-scrollbar { display: none; }
+  .dock button { flex: none; border: 0; background: transparent; padding: 10px 14px; border-radius: 13px; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .dock button:hover { background: rgba(255,255,255,.08); }
+  .dock button[aria-pressed="true"] { background: var(--ink); color: #17201b; }
+  .dock button.xr { color: var(--leaf); }
+  .dock button[disabled] { opacity: .45; }
+  .dock #soundBtn[aria-pressed] { background: transparent; color: inherit; }
+  .dock #soundBtn[aria-pressed="false"] { opacity: .6; }
+  .dock .sep { width: 1px; background: var(--line); margin: 6px 2px; flex: none; }
+
+  /* ---------- center crosshair / tip ---------- */
+  #cross { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.35); display: none; pointer-events: none; transition: transform .15s, border-color .15s; }
+  #cross.on { transform: scale(1.35); border-color: var(--leaf); }
+  body[data-mode="walk"] #cross { display: block; }
+  #tip { position: fixed; left: 50%; top: calc(50% + 24px); transform: translateX(-50%); padding: 7px 12px; border-radius: 12px; font-size: 13.5px; font-weight: 600; background: rgba(15,22,18,.78); pointer-events: none; opacity: 0; transition: opacity .2s; white-space: nowrap; }
+  #tip.show { opacity: 1; }
+  body[data-mode="orbit"] #tip, body[data-mode="camar"] #tip { top: auto; left: 0; transform: none; }
+
+  #toast { position: fixed; left: 50%; transform: translate(-50%, -8px); top: calc(env(safe-area-inset-top, 0px) + 16px); max-width: min(460px, calc(100% - 32px)); padding: 11px 16px; border-radius: 16px; font-size: 14.5px; line-height: 1.45; opacity: 0; transition: opacity .35s, transform .35s; pointer-events: none; text-align: center; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- mobile joystick + action ---------- */
+  #joy { position: fixed; left: 22px; bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); width: 124px; height: 124px; border-radius: 50%; background: rgba(20,28,24,.45); border: 1px solid var(--line); display: none; touch-action: none; }
+  #joy i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(244,247,242,.85); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+  #act { position: fixed; right: 22px; bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); min-width: 96px; height: 96px; border-radius: 48px; border: 0; padding: 0 18px; background: var(--leaf); color: #10301d; font-weight: 700; font-size: 15px; display: none; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+  body.touch[data-mode="walk"] #joy { display: block; }
+  body.touch[data-mode="walk"] #act.ready { display: block; }
+
+  /* ---------- info card ---------- */
+  #card { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); width: min(400px, calc(100% - 32px)); max-height: calc(100% - 200px); overflow: auto; border-radius: 22px; padding: 0 0 14px; display: none; }
+  #card.show { display: block; }
+  #card figure { margin: 0; position: relative; }
+  #card img { display: block; width: 100%; height: 170px; object-fit: cover; border-radius: 22px 22px 0 0; background: #2a332e; }
+  #card figcaption { position: absolute; right: 8px; bottom: 6px; font-size: 10.5px; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px #000; max-width: 90%; text-align: right; }
+  #card .body { padding: 14px 18px 0; }
+  #card h3 { margin: 0 0 6px; font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 17px; line-height: 1.25; }
+  #card p, #card li { font-size: 14px; line-height: 1.5; color: rgba(244,247,242,.9); }
+  #card p { margin: 0 0 8px; }
+  #card ol { margin: 4px 0 10px; padding-left: 0; list-style: none; counter-reset: st; }
+  #card ol li { position: relative; padding: 6px 0 6px 40px; counter-increment: st; }
+  #card ol li::before { content: counter(st); position: absolute; left: 0; top: 6px; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-family: "Unbounded", system-ui, sans-serif; font-size: 13px; background: var(--c, #5a6b60); color: #fff; }
+  #card ol li b { display: block; }
+  #card .close { position: absolute; right: 10px; top: 10px; width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(15,22,18,.7); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; z-index: 1; }
+  #card .noimg img { display: none; }
+  #card .noimg + .body { padding-top: 48px; }
+
+  /* ---------- AR controls ---------- */
+  #arbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); display: none; gap: 6px; padding: 6px; border-radius: 18px; align-items: center; }
+  #arbar button { border: 0; background: rgba(255,255,255,.1); padding: 11px 15px; border-radius: 13px; font-weight: 700; font-size: 15px; }
+  #arbar .exit { background: var(--ember); color: #2b120c; }
+  #arHint { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); padding: 10px 16px; border-radius: 14px; font-size: 14px; display: none; text-align: center; max-width: calc(100% - 32px); }
+  body[data-mode="ar"] #arbar, body[data-mode="camar"] #arbar { display: flex; }
+  body[data-mode="ar"] #arHint, body[data-mode="camar"] #arHint { display: block; }
+
+  /* ---------- stereo (Karton VR) ---------- */
+  #stereoUi { display: none; }
+  body[data-mode="cardboard"] #stereoUi { display: block; }
+  body[data-mode="cardboard"] .top, body[data-mode="cardboard"] .tasks, body[data-mode="cardboard"] .dock, body[data-mode="cardboard"] #toast, body[data-mode="cardboard"] #card { display: none !important; }
+  #stereoUi button { position: fixed; left: 12px; top: 12px; border: 0; border-radius: 12px; padding: 9px 13px; background: rgba(15,22,18,.7); color: #fff; font-weight: 700; }
+  #stereoUi .divider { position: fixed; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(0,0,0,.8); pointer-events: none; }
+  #walkFlag { position: fixed; right: 12px; top: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(15,22,18,.7); font-size: 13px; font-weight: 700; pointer-events: none; }
+
+  body[data-mode="vr"] .dock, body[data-mode="ar"] .dock, body[data-mode="camar"] .dock { display: none; }
+  body[data-mode="ar"] .tasks ul, body[data-mode="camar"] .tasks ul { display: none; }
+
+  /* ---------- intro ---------- */
+  #intro { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 20px; padding-top: calc(env(safe-area-inset-top, 0px) + 20px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); overflow: auto;
+    background: linear-gradient(180deg, rgba(18,22,20,.55), rgba(18,22,20,.92) 70%), #2a2724 center/cover no-repeat; }
+  #intro.hidden { display: none; }
+  .intro-in { width: min(640px, 100%); }
+  .intro-in h2 { margin: 0; font-family: "Unbounded", "Arial Black", system-ui, sans-serif; font-weight: 700; font-size: clamp(30px, 7.5vw, 54px); line-height: 1.02; letter-spacing: -.015em; text-shadow: 0 4px 24px rgba(0,0,0,.4); }
+  .intro-in .lead { margin: 14px 0 18px; font-size: 16.5px; line-height: 1.55; max-width: 52ch; color: rgba(244,247,242,.92); }
+  .goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 16px; margin: 0 0 20px; padding: 0; list-style: none; }
+  .goals li { font-size: 14px; line-height: 1.4; display: flex; gap: 8px; align-items: flex-start; }
+  .goals li span { font-size: 18px; line-height: 1.1; }
+  .starts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .start { border: 1px solid var(--line); background: rgba(255,255,255,.06); border-radius: 18px; padding: 14px 16px; text-align: left; cursor: pointer; transition: background .2s, transform .2s; }
+  .start:hover { background: rgba(255,255,255,.12); transform: translateY(-1px); }
+  .start b { display: block; font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 15.5px; margin-bottom: 4px; }
+  .start small { display: block; font-size: 13px; line-height: 1.4; color: var(--muted); }
+  .start.primary { background: var(--leaf); color: #10301d; border-color: transparent; }
+  .start.primary small { color: rgba(16,48,29,.8); }
+  .start[hidden] { display: none; }
+  .credit { margin-top: 16px; font-size: 11.5px; color: rgba(244,247,242,.55); }
+  .credit a { color: inherit; }
+
+  #err { display: none; position: fixed; inset: 0; z-index: 9; place-items: center; text-align: center; padding: 24px; background: #1c2220; }
+
+  @media (max-width: 760px) {
+    .top { padding: 10px 12px 9px; width: min(250px, calc(100% - 150px)); border-radius: 16px; }
+    .top h1 { font-size: 15px; }
+    .top .mode { font-size: 11.5px; margin-bottom: 6px; }
+    .meter-row b { font-size: 13px; }
+    .tasks { width: auto; max-width: 170px; padding: 4px; border-radius: 16px; }
+    .tasks-toggle { display: block; font-size: 12.5px; padding: 8px; }
+    .tasks:not(.open) h2, .tasks:not(.open) ul, .tasks:not(.open) .note { display: none; }
+    .tasks.open { max-width: min(310px, calc(100% - 32px)); }
+    #card { right: 10px; left: 10px; width: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); max-height: 52%; }
+    #card img { height: 120px; }
+    .dock button { padding: 9px 11px; font-size: 13px; }
+    #toast { top: calc(env(safe-area-inset-top, 0px) + 132px); font-size: 13.5px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-mode="intro">
+<video id="camfeed" playsinline muted autoplay></video>
+<canvas id="scene" tabindex="0" aria-label="Ekologik vaziyatning 3D sahnasi: ikki zavod, ifloslangan ko‘l va orol tabiati"></canvas>
+
+<div id="ui">
+  <header class="top glass">
+    <h1>Ekologik vaziyat</h1>
+    <p class="mode" id="modeName">Kuzatuv rejimi</p>
+    <div class="meter-row"><span>Havo sifati</span><b id="aqi">AQI 285</b></div>
+    <div class="bar" role="progressbar" aria-label="Tabiat tiklanishi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barWrap"><i id="ecoBar"></i></div>
+    <div class="meter-row small"><span id="ecoLabel">Juda ifloslangan</span><span id="ecoPct">0%</span></div>
+  </header>
+
+  <aside class="tasks glass" id="tasks">
+    <button class="tasks-toggle" id="tasksToggle" aria-expanded="false">Vazifalar · <span id="tasksSum">0/33</span></button>
+    <h2>Vazifalar</h2>
+    <ul id="taskList"></ul>
+    <p class="note">Vazifani bossangiz, keyingi joy yashil nur bilan belgilanadi.</p>
+  </aside>
+
+  <div id="toast" class="glass" role="status" aria-live="polite"></div>
+  <div id="cross"></div>
+  <div id="tip"></div>
+  <div id="joy" aria-hidden="true"><i></i></div>
+  <button id="act">Bajarish</button>
+
+  <nav class="dock glass" id="dock" aria-label="Rejimlar">
+    <button data-mode="orbit">Kuzatuv</button>
+    <button data-mode="walk">Sayr</button>
+    <span class="sep"></span>
+    <button data-mode="vr" class="xr">VR shlem</button>
+    <button data-mode="ar" class="xr">AR</button>
+    <button data-mode="cardboard" class="xr">Karton VR</button>
+    <button data-mode="camar" class="xr">Kamera AR</button>
+    <span class="sep"></span>
+    <button id="soundBtn" aria-pressed="true" title="Ovoz">Ovoz</button>
+    <button id="helpBtn" title="Yordam">Yordam</button>
+  </nav>
+
+  <div id="arHint" class="glass">Telefonni stol yoki pol ustida sekin aylantiring, keyin halqa paydo bo‘lgan joyga bosing.</div>
+  <div id="arbar" class="glass">
+    <button id="arSmaller" aria-label="Kichraytirish">−</button>
+    <button id="arBigger" aria-label="Kattalashtirish">+</button>
+    <button id="arReplace">Qayta joylash</button>
+    <button id="arExit" class="exit">Chiqish</button>
+  </div>
+
+  <section id="card" class="glass" aria-live="polite">
+    <button class="close" id="cardClose" aria-label="Yopish">×</button>
+    <figure id="cardFig"><img id="cardImg" alt=""><figcaption id="cardCap"></figcaption></figure>
+    <div class="body" id="cardBody"></div>
+  </section>
+
+  <div id="stereoUi">
+    <div class="divider"></div>
+    <button id="stereoExit">Chiqish</button>
+    <div id="walkFlag">Ekranga bosing — yurish</div>
+  </div>
+
+  <section id="intro" aria-labelledby="introTitle">
+    <div class="intro-in">
+      <h2 id="introTitle">Zavodlar qolsin,<br>zahar qolmasin</h2>
+      <p class="lead">Orolda ikki zavod ishlaydi — ular odamlarga mahsulot va ish beradi. Ammo mo‘rilardan zaharli tutun chiqmoqda, ko‘l iflos, yer qurigan. Siz ekologsiz: orol bo‘ylab yurib, mo‘rilarga filtr o‘rnating, suvni tozalang, chiqindini saralang va daraxt eking.</p>
+      <ul class="goals">
+        <li><span>⚙️</span>5 ta mo‘riga tozalash filtri</li>
+        <li><span>💧</span>Oqova suvni tozalash stansiyasi</li>
+        <li><span>♻️</span>14 ta chiqindini saralash</li>
+        <li><span>🌱</span>10 ta daraxt ekish</li>
+        <li><span>☀️</span>Quyosh va shamol energiyasi</li>
+      </ul>
+      <div class="starts" id="starts">
+        <button class="start" data-start="walk"><b>Sayr qilish</b><small>Birinchi shaxsdan yuring: WASD + sichqoncha yoki ekrandagi joystik</small></button>
+        <button class="start" data-start="orbit"><b>Kuzatuv</b><small>Orolni yuqoridan aylantirib ko‘ring va obyektlarga bosing</small></button>
+        <button class="start" data-start="vr" hidden><b>VR shlemda</b><small>Meta Quest, Pico va boshqa WebXR shlemlar: tutqich bilan yuring</small></button>
+        <button class="start" data-start="ar" hidden><b>AR — stol ustida</b><small>Orolni haqiqiy xonangizga joylashtiring (Android + ARCore)</small></button>
+        <button class="start" data-start="cardboard" hidden><b>Karton VR</b><small>Telefonni VR ko‘zoynakka qo‘ying, nigoh bilan boshqaring</small></button>
+        <button class="start" data-start="camar" hidden><b>Kamera AR</b><small>iPhone va boshqa telefonlar: orol kamera tasviri ustida</small></button>
+      </div>
+      <p class="credit" id="introCredit">Fon surati: “Smoke Pollution”, Pixabay / Wikimedia Commons, CC0. Sahnadagi yer, suv, g‘isht va osmon teksturalari — haqiqiy fotosuratlar (three.js namunalar to‘plami, MIT).</p>
+    </div>
+  </section>
+</div>
+
+<div id="err"><p>3D sahna yuklanmadi. Internet aloqasini tekshirib, sahifani yangilang.</p></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  if (!window.THREE) { document.getElementById('err').style.display = 'grid'; return; }
+
+  // =====================================================================
+  // 0. Utilities
+  // =====================================================================
+  const $ = s => document.querySelector(s);
+  const V3 = THREE.Vector3;
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = t => t * t * (3 - 2 * t);
+  const easeOutBack = t => { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  let seed = 20260; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const params = new URLSearchParams(location.search);
+  const wantMode = (params.get('mode') || '').toLowerCase();
+  if (isTouch) document.body.classList.add('touch');
+
+  // Real photographs (Wikimedia Commons, free licences) for info cards
+  const WM = f => 'https://commons.wikimedia.org/wiki/Special:FilePath/' + f + '?width=900';
+  const PHOTOS = {
+    smoke:  { src: WM('Smoke_Pollution.jpg'), cap: '“Smoke Pollution” — Pixabay / Wikimedia Commons, CC0' },
+    esp:    { src: WM('Inside_of_the_electrostatic_precipitator.jpg'), cap: 'Elektrostatik filtr ichi — LukaszKatlewa, Wikimedia Commons, CC BY-SA 3.0' },
+    water:  { src: WM('Marlborough_East_Wastewater_Treatment_Plant_Aerial.JPG'), cap: 'Oqova suv tozalash inshooti — Nick Allen, Wikimedia Commons, CC BY-SA 4.0' },
+    wind:   { src: WM('Windpark-Wind-Farm.jpg'), cap: 'Shamol elektr stansiyasi — Philip May, Wikimedia Commons, CC BY-SA 3.0' },
+    stacks: { src: WM('Cumberland_Power_Plant_smokestacks.jpg'), cap: 'Elektr stansiyasi mo‘rilari — Wikimedia Commons, jamoat mulki' }
+  };
+  $('#intro').style.backgroundImage = 'linear-gradient(180deg, rgba(18,22,20,.55), rgba(18,22,20,.93) 70%), url("' + PHOTOS.smoke.src + '")';
+
+  // =====================================================================
+  // 1. Renderer, scene, camera rig
+  // =====================================================================
+  const canvas = $('#scene');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileUA ? 1.5 : 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.xr.enabled = true;
+  renderer.setClearColor(0x6d6052, 1);
+
+  const scene = new THREE.Scene();
+  const fogDirty = new THREE.Color('#6d6052'), fogClean = new THREE.Color('#c4dbe8');
+  scene.fog = new THREE.Fog(fogDirty.clone(), 10, 90);
+  const skyFallback = new THREE.Color('#9cc4df');
+  scene.background = skyFallback;
+
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.03, 1600);
+  camera.rotation.order = 'YXZ';
+  const dolly = new THREE.Group(); dolly.add(camera); scene.add(dolly);
+  const world = new THREE.Group(); scene.add(world);
+
+  // =====================================================================
+  // 2. Real photo textures (three.js example library, CORS-enabled CDNs)
+  //    with procedural fallbacks so the scene always renders.
+  // =====================================================================
+  const TEX_BASES = [
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/',
+    'https://threejs.org/examples/textures/'
+  ];
+  const texLoader = new THREE.TextureLoader(); texLoader.setCrossOrigin('anonymous');
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  function makeCanvas(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); return c; }
+  function canvasTex(w, h, draw, srgb = true) { const t = new THREE.CanvasTexture(makeCanvas(w, h, draw)); if (srgb) t.encoding = THREE.sRGBEncoding; return t; }
+  function loadImage(path, ok, i = 0) {
+    if (i >= TEX_BASES.length) return;
+    texLoader.load(TEX_BASES[i] + path, t => ok(t.image), undefined, () => loadImage(path, ok, i + 1));
+  }
+  function photoTex(path, fallbackDraw, rx = 1, ry = rx, srgb = true) {
+    const t = canvasTex(256, 256, fallbackDraw, srgb);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = Math.min(8, maxAniso);
+    loadImage(path, img => { t.image = img; t.needsUpdate = true; });
+    return t;
+  }
+  function noiseFill(g, w, h, base, spread, n = 2600, size = 3) {
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < n; i++) { const c = spread[(Math.random() * spread.length) | 0]; g.fillStyle = c; g.fillRect(Math.random() * w, Math.random() * h, size, size); }
+  }
+  const drawGrass = (g, w, h) => noiseFill(g, w, h, '#4f7f37', ['#5f9a42', '#3f6a2c', '#6aa24a', '#46742f']);
+  const drawDirt  = (g, w, h) => noiseFill(g, w, h, '#7b6248', ['#8a6f52', '#6a523b', '#957a5c', '#5e4935'], 3200, 4);
+  const drawFlatN = (g, w, h) => { g.fillStyle = 'rgb(128,128,255)'; g.fillRect(0, 0, w, h); };
+  const drawBrick = (g, w, h) => {
+    g.fillStyle = '#8a8580'; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 16) for (let x = (y / 16) % 2 ? -16 : 0; x < w; x += 32) {
+      g.fillStyle = ['#7d4a3a', '#8b5443', '#71402f'][(Math.random() * 3) | 0]; g.fillRect(x + 1, y + 1, 30, 14);
+    }
+  };
+
+  const grassTex  = photoTex('terrain/grasslight-big.jpg', drawGrass, 16);
+  const grassNorm = photoTex('terrain/grasslight-big-nm.jpg', drawFlatN, 16, 16, false);
+  const rockTex   = photoTex('terrain/backgrounddetailed6.jpg', drawDirt, 20, 1);
+  const oceanN    = photoTex('waternormals.jpg', drawFlatN, 36, 36, false);
+  const pondN     = photoTex('waternormals.jpg', drawFlatN, 2.5, 2.5, false);
+  const riverN    = photoTex('waternormals.jpg', drawFlatN, 1, 6, false);
+  function brickTex(rx, ry) { return photoTex('brick_diffuse.jpg', drawBrick, rx, ry); }
+
+  // Polluted soil overlay = real dirt photo tiled into a canvas, masked to the west half
+  const DIRT_RES = isMobileUA ? 1024 : 2048;
+  const dirtMaskCanvas = makeCanvas(DIRT_RES, DIRT_RES, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, w, 0);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.46, 'rgba(0,0,0,1)'); gr.addColorStop(0.6, 'rgba(0,0,0,.55)'); gr.addColorStop(0.72, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 340; i++) { const x = rnd() * w * 0.7, y = rnd() * h, r = (0.01 + rnd() * 0.04) * w; const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, 'rgba(0,0,0,' + (0.25 + rnd() * 0.4) + ')'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, 2 * r, 2 * r); }
+  });
+  const dirtCanvas = document.createElement('canvas'); dirtCanvas.width = dirtCanvas.height = DIRT_RES;
+  const dirtTex = new THREE.CanvasTexture(dirtCanvas); dirtTex.encoding = THREE.sRGBEncoding; dirtTex.anisotropy = Math.min(8, maxAniso);
+  function composeDirt(img) {
+    const g = dirtCanvas.getContext('2d'), N = DIRT_RES, tiles = 9, ts = N / tiles;
+    g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, N, N);
+    if (img) { for (let y = 0; y < tiles; y++) for (let x = 0; x < tiles; x++) g.drawImage(img, x * ts, y * ts, ts + 1, ts + 1); }
+    else noiseFill(g, N, N, '#7b6248', ['#8a6f52', '#6a523b', '#957a5c', '#5e4935'], 60000, 6);
+    // scorched, oily blotches
+    for (let i = 0; i < 70; i++) { const x = rnd() * N * 0.55, y = rnd() * N, r = (0.01 + rnd() * 0.03) * N; const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, 'rgba(30,24,18,.55)'); rg.addColorStop(1, 'rgba(30,24,18,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, 2 * r, 2 * r); }
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(dirtMaskCanvas, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    dirtTex.needsUpdate = true;
+  }
+  composeDirt(null);
+  loadImage('terrain/backgrounddetailed6.jpg', img => { try { composeDirt(img); } catch (e) { /* keep fallback */ } });
+
+  // Real sky photo cube map
+  let skyCube = null;
+  const envMats = [];
+  function loadSky(i = 0) {
+    if (i >= TEX_BASES.length) return;
+    new THREE.CubeTextureLoader().setCrossOrigin('anonymous').setPath(TEX_BASES[i] + 'cube/skyboxsun25deg/')
+      .load(['px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg'], cube => {
+        cube.encoding = THREE.sRGBEncoding; skyCube = cube;
+        envMats.forEach(m => { m.envMap = cube; m.needsUpdate = true; });
+        applyEnvironment();
+      }, undefined, () => loadSky(i + 1));
+  }
+
+  // Procedural helper textures
+  const smokeTex = canvasTex(128, 128, (g, w, h) => {
+    for (let i = 0; i < 16; i++) {
+      const x = w / 2 + (Math.random() - .5) * 46, y = h / 2 + (Math.random() - .5) * 46, r = 22 + Math.random() * 30;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(255,255,255,.30)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    }
+  });
+  const leafTex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 1800; i++) { const v = 150 + Math.random() * 105 | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 3 + Math.random() * 5, 2 + Math.random() * 3, Math.random() * 3, 0, 7); g.fill(); }
+  });
+  leafTex.wrapS = leafTex.wrapT = THREE.RepeatWrapping; leafTex.repeat.set(2, 2);
+  const barkTex = canvasTex(64, 256, (g, w, h) => {
+    g.fillStyle = '#6b4a2f'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { g.fillStyle = Math.random() < .5 ? '#52371f' : '#7d5a3b'; g.fillRect(Math.random() * w, 0, 1 + Math.random() * 3, h); }
+  });
+  barkTex.wrapS = barkTex.wrapT = THREE.RepeatWrapping;
+  const solarTex = canvasTex(256, 160, (g, w, h) => {
+    g.fillStyle = '#c9d2da'; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 6; x++) {
+      const gr = g.createLinearGradient(0, y * 40, 0, y * 40 + 38); gr.addColorStop(0, '#1d3f7a'); gr.addColorStop(1, '#122a55');
+      g.fillStyle = gr; g.fillRect(x * 42 + 3, y * 39 + 3, 38, 35);
+      g.strokeStyle = 'rgba(160,190,230,.35)'; g.lineWidth = 1; for (let k = 1; k < 4; k++) { g.beginPath(); g.moveTo(x * 42 + 3, y * 39 + 3 + k * 9); g.lineTo(x * 42 + 41, y * 39 + 3 + k * 9); g.stroke(); }
+    }
+  });
+
+  function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function textSprite(text, { fg = '#fff', bg = 'rgba(18,26,22,.78)', px = 44, h = 0.9, weight = 700 } = {}) {
+    const c = document.createElement('canvas'), g = c.getContext('2d');
+    const font = `${weight} ${px}px Manrope, "Segoe UI", Arial, sans-serif`; g.font = font;
+    c.width = Math.ceil(g.measureText(text).width + px * 1.1); c.height = Math.ceil(px * 1.55);
+    g.font = font;
+    if (bg) { g.fillStyle = bg; roundRect(g, 0, 0, c.width, c.height, c.height / 2); g.fill(); }
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, c.width / 2, c.height / 2 + px * 0.04);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, fog: false }));
+    s.scale.set(h * c.width / c.height, h, 1); return s;
+  }
+  function iconTex(emoji, ring) {
+    return canvasTex(128, 160, g => {
+      g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.arc(64, 68, 56, 0, 7); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 62, 54, 0, 7); g.fill();
+      g.lineWidth = 9; g.strokeStyle = ring; g.stroke();
+      g.beginPath(); g.moveTo(46, 110); g.lineTo(82, 110); g.lineTo(64, 152); g.closePath(); g.fillStyle = ring; g.fill();
+      g.font = '58px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(emoji, 64, 66);
+    });
+  }
+
+  // =====================================================================
+  // 3. Lights
+  // =====================================================================
+  const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x4a3b2c, 0.45); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1d6, 0.8);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(isMobileUA ? 1024 : 2048, isMobileUA ? 1024 : 2048);
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  scene.add(sun); scene.add(sun.target);
+  function setShadowFrame() {
+    const s = world.scale.x, c = world.position;
+    sun.position.set(c.x + 40 * s, c.y + 62 * s, c.z + 28 * s);
+    sun.target.position.copy(c); sun.target.updateMatrixWorld();
+    const sc = sun.shadow.camera; sc.left = -38 * s; sc.right = 38 * s; sc.top = 38 * s; sc.bottom = -38 * s; sc.near = 1 * s; sc.far = 170 * s;
+    sc.updateProjectionMatrix();
+  }
+
+  const std = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.85 }, o));
+  function addMesh(geo, mat, x, y, z, parent = world, shadow = true) {
+    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
+    if (shadow) { m.castShadow = true; m.receiveShadow = true; }
+    parent.add(m); return m;
+  }
+
+  // =====================================================================
+  // 4. Island, ocean, sky dome (smog)
+  // =====================================================================
+  const R = 30;
+  const grassMat = std(0xffffff, { map: grassTex, normalMap: grassNorm, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95 });
+  const groundGeo = new THREE.CircleGeometry(R, 128);
+  const ground = addMesh(groundGeo, grassMat, 0, 0, 0); ground.rotation.x = -Math.PI / 2; ground.castShadow = false;
+  const dirtMat = std(0xffffff, { map: dirtTex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const dirt = addMesh(groundGeo, dirtMat, 0, 0.015, 0); dirt.rotation.x = -Math.PI / 2; dirt.castShadow = false;
+
+  const cliffMat = std(0xb9a991, { map: rockTex, roughness: 1 });
+  const cliff = addMesh(new THREE.CylinderGeometry(R, R + 1.6, 4, 128, 1, true), cliffMat, 0, -2, 0); cliff.castShadow = false;
+  const bottomCap = addMesh(new THREE.CircleGeometry(R + 1.6, 64), std(0x5c4a3a), 0, -4, 0); bottomCap.rotation.x = Math.PI / 2;
+  // sandy beach rim
+  const beach = addMesh(new THREE.RingGeometry(R - 1.4, R + 0.05, 128), std(0xc8b38a, { map: rockTex, roughness: 1, transparent: true, opacity: .85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }), 0, 0.02, 0);
+  beach.rotation.x = -Math.PI / 2; beach.castShadow = false;
+
+  const oceanDirty = new THREE.Color('#4a5240'), oceanClean = new THREE.Color('#2a6f9a');
+  const oceanMat = std(oceanDirty.clone(), { normalMap: oceanN, normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.12, metalness: 0.25 });
+  envMats.push(oceanMat);
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), oceanMat);
+  ocean.rotation.x = -Math.PI / 2; ocean.position.y = -1.1; ocean.receiveShadow = true; world.add(ocean);
+
+  const domeMat = new THREE.MeshBasicMaterial({ color: fogDirty.clone(), side: THREE.BackSide, transparent: true, opacity: 0.92, depthWrite: false, fog: false });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(520, 32, 16), domeMat); scene.add(dome);
+
+  // shadow catcher for AR table-top
+  const catcher = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), new THREE.ShadowMaterial({ opacity: 0.3 }));
+  catcher.rotation.x = -Math.PI / 2; catcher.position.y = -3.98; catcher.receiveShadow = true; catcher.visible = false; world.add(catcher);
+
+  // =====================================================================
+  // 5. Collision helpers
+  // =====================================================================
+  const circles = [], boxes = [];
+  const addCircle = (x, z, r) => circles.push({ x, z, r });
+  const addBox = (x0, x1, z0, z1) => boxes.push({ x0, x1, z0, z1 });
+  const POND = { x: -14, z: 10, rx: 7, rz: 4.5 };
+  const inPond = (x, z, m = 0) => ((x - POND.x) / (POND.rx + m)) ** 2 + ((z - POND.z) / (POND.rz + m)) ** 2 < 1;
+  function blocked(x, z, m = 0.35) {
+    if (x * x + z * z > (R - 1.2) ** 2) return true;
+    if (inPond(x, z, m * 0.5)) return true;
+    for (const c of circles) if ((x - c.x) ** 2 + (z - c.z) ** 2 < (c.r + m) ** 2) return true;
+    for (const b of boxes) if (x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m) return true;
+    return false;
+  }
+
+  // =====================================================================
+  // 6. River (clean side) and polluted pond
+  // =====================================================================
+  const riverCurve = new THREE.CatmullRomCurve3([[11, -27.5], [15, -17], [11.5, -7], [14, 3], [19, 11], [17, 19], [13.5, 26.8]].map(([x, z]) => new V3(x, 0, z)));
+  const riverSamples = riverCurve.getSpacedPoints(90);
+  const RHW = 2.1;
+  const nearRiver = (x, z, m = 0) => riverSamples.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < (RHW + m) ** 2);
+  function ribbon(curve, hw, segs, y) {
+    const pos = [], nor = [], uv = [], idx = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs, p = curve.getPoint(t), tg = curve.getTangent(t);
+      const n = new V3(-tg.z, 0, tg.x).normalize(), w = hw * (0.85 + 0.15 * Math.sin(t * 11));
+      const a = p.clone().addScaledVector(n, w), b = p.clone().addScaledVector(n, -w);
+      pos.push(a.x, y, a.z, b.x, y, b.z); nor.push(0, 1, 0, 0, 1, 0); uv.push(0, t * 10, 1, t * 10);
+      if (i < segs) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g;
+  }
+  const bankMat = std(0xa89466, { map: rockTex, roughness: 1, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3 });
+  const bank = new THREE.Mesh(ribbon(riverCurve, RHW + 1.0, 160, 0.03), bankMat); bank.receiveShadow = true; world.add(bank);
+  const riverMat = std(0x2f86b8, { normalMap: riverN, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.06, metalness: 0.25, side: THREE.DoubleSide, transparent: true, opacity: 0.92, polygonOffset: true, polygonOffsetFactor: -4 });
+  envMats.push(riverMat);
+  const river = new THREE.Mesh(ribbon(riverCurve, RHW, 160, 0.06), riverMat); river.receiveShadow = true; world.add(river);
+
+  const pondDirty = new THREE.Color('#4b4630'), pondClean = new THREE.Color('#2b84bd');
+  const pondMat = std(pondDirty.clone(), { normalMap: pondN, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.35, metalness: 0.1 });
+  envMats.push(pondMat);
+  const pondRim = addMesh(new THREE.CircleGeometry(1, 64), std(0x5a4632, { map: rockTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3 }), POND.x, 0.035, POND.z);
+  pondRim.rotation.x = -Math.PI / 2; pondRim.scale.set(POND.rx + 1, POND.rz + 1, 1); pondRim.castShadow = false;
+  const pond = addMesh(new THREE.CircleGeometry(1, 64), pondMat, POND.x, 0.07, POND.z);
+  pond.rotation.x = -Math.PI / 2; pond.scale.set(POND.rx, POND.rz, 1); pond.castShadow = false;
+  const scum = new THREE.Group(); world.add(scum);
+  const scumMat = std(0x8a7a2c, { roughness: .5, transparent: true, opacity: .85 });
+  for (let i = 0; i < 16; i++) {
+    const a = rnd() * 6.28, r = Math.sqrt(rnd()) * 0.8;
+    const m = addMesh(new THREE.CircleGeometry(0.4 + rnd() * 0.9, 12), scumMat, POND.x + Math.cos(a) * r * POND.rx, 0.09, POND.z + Math.sin(a) * r * POND.rz, scum, false);
+    m.rotation.x = -Math.PI / 2;
+  }
+  let pondClean01 = 0, pondTarget = 0;
+
+  // =====================================================================
+  // 7. Factories (they stay! only the exhaust gets cleaned)
+  // =====================================================================
+  const metalMat = std(0x8d969c, { roughness: 0.45, metalness: 0.6 }); envMats.push(metalMat);
+  const darkMetal = std(0x4a4f53, { roughness: 0.6, metalness: 0.5 });
+  const winMat = std(0xffd27a, { emissive: 0xffb347, emissiveIntensity: 0.9, roughness: 0.4 });
+  const halls = [];
+  function makeHall(cx, cz, w, h, d, tint, name) {
+    const g = new THREE.Group(); g.position.set(cx, 0, cz); world.add(g);
+    addMesh(new THREE.BoxGeometry(w, h, d), std(tint, { map: brickTex(w / 3.2, h / 3.2) }), 0, h / 2, 0, g);
+    addMesh(new THREE.BoxGeometry(w + 0.4, 0.5, d + 0.4), std(0x6c6a66), 0, h + 0.25, 0, g);              // roof slab
+    for (let i = 0; i < 3; i++) addMesh(new THREE.BoxGeometry(1.2, 1, 1.2), darkMetal, -w / 3 + i * w / 3, h + 1, d / 2 - 1.3, g); // vents
+    const nwin = Math.floor(w / 2.4);
+    for (let row = 0; row < 2; row++) for (let i = 0; i < nwin; i++)
+      addMesh(new THREE.BoxGeometry(1.3, 1.1, 0.08), winMat, -w / 2 + 1.4 + i * (w - 2.8) / (nwin - 1), 1.9 + row * 2.4, d / 2 + 0.03, g, false);
+    addMesh(new THREE.BoxGeometry(3, 3.6, 0.12), std(0x3d4246, { metalness: .4, roughness: .6 }), w / 2 - 2.6, 1.8, d / 2 + 0.06, g, false); // gate
+    const sign = textSprite(name, { px: 46, h: 1.3 }); sign.position.set(0, h + 2.4, d / 2); g.add(sign);
+    addBox(cx - w / 2, cx + w / 2, cz - d / 2, cz + d / 2);
+    const rec = { g, cx, cz, w, h, d }; halls.push(rec); return rec;
+  }
+  const hallA = makeHall(-15, -6, 14, 7, 10, 0xb7a89a, 'Metallurgiya zavodi');
+  const hallB = makeHall(6, -15, 10, 6, 8, 0xc4b6a4, 'Kimyo zavodi');
+  // chemical tanks of factory B
+  [[3.6, -8.6, 1.6, 4.2], [7.6, -8.4, 1.3, 3.4]].forEach(([x, z, r, h]) => {
+    addMesh(new THREE.CylinderGeometry(r, r, h, 24), metalMat, x, h / 2, z);
+    addMesh(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), metalMat, x, h, z);
+    addCircle(x, z, r);
+  });
+
+  // chimneys
+  const chimneys = [];
+  function makeChimney(x, z, H) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); world.add(g);
+    addMesh(new THREE.CylinderGeometry(0.85, 1.25, H, 24), std(0xc9b8a8, { map: brickTex(3, H / 3) }), 0, H / 2, 0, g);
+    addMesh(new THREE.CylinderGeometry(0.95, 0.95, 1.1, 24), std(0xc0392b, { roughness: .6 }), 0, H - 1.6, 0, g);
+    addMesh(new THREE.CylinderGeometry(0.97, 0.97, 1.1, 24), std(0xf2f2ee, { roughness: .6 }), 0, H - 2.7, 0, g);
+    addMesh(new THREE.CylinderGeometry(0.98, 0.9, 0.4, 24), darkMetal, 0, H, 0, g);
+    addCircle(x, z, 1.3);
+    const ch = { x, z, H, top: new V3(x, H + 0.2, z), f: 0, fTarget: 0, smoke: [], labels: [], tower: null };
+    chimneys.push(ch); return ch;
+  }
+  [[-19, -12.8, 24], [-15, -12.8, 28], [-11, -12.8, 22], [3, -20.6, 21], [9, -20.6, 23]].forEach(a => makeChimney(...a));
+
+  // ---------- multi-stage filter tower (appears when installed) ----------
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.26, roughness: 0.05, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false });
+  envMats.push(glassMat);
+  const STAGES = [
+    { name: 'Elektrostatik filtr', col: 0x8a96a3, css: '#8a96a3' },
+    { name: 'Ho‘l skrubber', col: 0x3f9fd8, css: '#3f9fd8' },
+    { name: 'Katalitik reaktor', col: 0xe39a3b, css: '#e39a3b' },
+    { name: 'Faollangan ko‘mir', col: 0x2d2d2d, css: '#3b3b3b' }
+  ];
+  const stageMats = STAGES.map(s => std(s.col, { emissive: s.col, emissiveIntensity: 0.25, roughness: .5, transparent: true, opacity: .9 }));
+  const GRAD = [[0, [0.22, 0.16, 0.10]], [0.3, [0.42, 0.36, 0.22]], [0.55, [0.66, 0.63, 0.55]], [0.8, [0.9, 0.93, 0.95]], [1, [1, 1, 1]]];
+  function gradColor(t, out) {
+    for (let i = 1; i < GRAD.length; i++) if (t <= GRAD[i][0]) {
+      const [t0, c0] = GRAD[i - 1], [t1, c1] = GRAD[i], k = (t - t0) / (t1 - t0);
+      out[0] = lerp(c0[0], c1[0], k); out[1] = lerp(c0[1], c1[1], k); out[2] = lerp(c0[2], c1[2], k); return;
+    }
+    out[0] = out[1] = out[2] = 1;
+  }
+  function makeTower(ch) {
+    const H = 10, r = 1.35, g = new THREE.Group(); g.position.set(ch.x, 0, ch.z - 3.6); world.add(g);
+    addMesh(new THREE.CylinderGeometry(r + 0.25, r + 0.35, 0.6, 24), darkMetal, 0, 0.3, 0, g);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H - 1, 28, 1, true), glassMat); glass.position.y = 0.6 + (H - 1) / 2; glass.renderOrder = 2; g.add(glass);
+    addMesh(new THREE.CylinderGeometry(0.45, r, 1.0, 24), metalMat, 0, H + 0.1, 0, g);
+    STAGES.forEach((s, i) => {
+      const y = 1.6 + i * 2.1;
+      addMesh(new THREE.CylinderGeometry(r * 0.94, r * 0.94, 0.42, 24), stageMats[i], 0, y, 0, g, false);
+      addMesh(new THREE.TorusGeometry(r + 0.04, 0.07, 8, 32), metalMat, 0, y, 0, g, false).rotation.x = Math.PI / 2;
+    });
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + Math.PI / 4; addMesh(new THREE.CylinderGeometry(0.07, 0.07, H, 6), metalMat, Math.cos(a) * (r + 0.08), H / 2, Math.sin(a) * (r + 0.08), g); }
+    // pipes chimney <-> tower (gas in at the bottom, clean gas back into the chimney above)
+    const pipeLen = 3.6 - r - 1.0;
+    [1.2, H - 0.6].forEach(y => { const p = addMesh(new THREE.CylinderGeometry(0.35, 0.35, pipeLen + 0.4, 14), metalMat, 0, y, r + pipeLen / 2, g); p.rotation.x = Math.PI / 2; });
+    // particles flowing up through the stages
+    const N = 80, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), ph = new Float32Array(N), ang = new Float32Array(N), rad = new Float32Array(N);
+    for (let i = 0; i < N; i++) { ph[i] = Math.random(); ang[i] = Math.random() * 6.28; rad[i] = Math.random() * (r * 0.85); }
+    const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); pg.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const pts = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.24, vertexColors: true, transparent: true, depthWrite: false }));
+    pts.frustumCulled = false; g.add(pts);
+    const label = textSprite('Filtr ishlamoqda ✓', { px: 40, h: 0.8, bg: 'rgba(30,90,55,.85)' }); label.position.set(0, H + 1.6, 0); g.add(label);
+    addCircle(g.position.x, g.position.z, r + 0.2);
+    g.visible = false; g.scale.set(1, 0.001, 1);
+    return { g, pts, pos, col, ph, ang, rad, N, H, r };
+  }
+  chimneys.forEach(ch => { ch.tower = makeTower(ch); });
+
+  // ---------- smoke: toxic plume -> harmless water vapour ----------
+  const toxicA = new THREE.Color('#2a2420'), toxicB = new THREE.Color('#5c4c22'), steam = new THREE.Color('#ffffff');
+  const POLLUTANTS = ['SO₂', 'NOx', 'PM2.5', 'Hg', 'CO'];
+  chimneys.forEach((ch, ci) => {
+    for (let i = 0; i < 22; i++) {
+      const mat = new THREE.SpriteMaterial({ map: smokeTex, color: (i % 3 ? toxicA : toxicB).clone(), transparent: true, depthWrite: false, opacity: 0 });
+      const s = new THREE.Sprite(mat); s.userData = { t: i / 22, base: (i % 3 ? toxicA : toxicB), wob: Math.random() * 6 };
+      world.add(s); ch.smoke.push(s);
+    }
+    for (let k = 0; k < 2; k++) {
+      const sp = textSprite(POLLUTANTS[(ci * 2 + k) % POLLUTANTS.length], { px: 42, h: 1.1, fg: '#ffe2a8', bg: 'rgba(60,30,20,.72)' });
+      sp.userData = { t: k * 0.5 }; world.add(sp); ch.labels.push(sp);
+    }
+    const st = textSprite('H₂O bug‘i', { px: 40, h: 0.9, fg: '#21485f', bg: 'rgba(255,255,255,.85)' });
+    st.userData = { t: 0.3 }; st.material.opacity = 0; world.add(st); ch.steamLabel = st;
+  });
+  const WIND = new V3(1, 0, 0.38).normalize();
+
+  // smog cloud over the island
+  const smog = [];
+  for (let i = 0; i < 16; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x4a4038, transparent: true, depthWrite: false, opacity: 0.6 }));
+    s.position.set(-24 + rnd() * 34, 24 + rnd() * 9, -22 + rnd() * 30); const sc = 20 + rnd() * 16; s.scale.set(sc, sc * 0.6, 1);
+    world.add(s); smog.push(s);
+  }
+
+  // ---------- discharge pipe into the pond ----------
+  const dPipe = addMesh(new THREE.CylinderGeometry(0.32, 0.32, 6.8, 12), darkMetal, -12, 0.45, 2.2); dPipe.rotation.x = Math.PI / 2;
+  const outflow = [];
+  for (let i = 0; i < 14; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0x5a4a20, transparent: true, depthWrite: false, opacity: .8 }));
+    s.userData = { t: i / 14 }; world.add(s); outflow.push(s);
+  }
+
+  // ---------- water treatment station (appears when built) ----------
+  const station = new THREE.Group(); station.position.set(-5.8, 0, 3.6); world.add(station);
+  const concrete = std(0xb8b4ac, { roughness: .9 });
+  [[-1.4, 0, 1.4], [1.6, 0.6, 1.2]].forEach(([x, z, r]) => {
+    addMesh(new THREE.CylinderGeometry(r, r, 1.6, 28), concrete, x, 0.8, z, station);
+    const w = addMesh(new THREE.CircleGeometry(r * 0.9, 28), std(0x3a9ad9, { roughness: .1, metalness: .2 }), x, 1.61, z, station, false); w.rotation.x = -Math.PI / 2;
+    addCircle(station.position.x + x, station.position.z + z, r);
+  });
+  addMesh(new THREE.BoxGeometry(2, 2.2, 1.8), std(0xe9eef0), 0.2, 1.1, -1.9, station);
+  addCircle(station.position.x + 0.2, station.position.z - 1.9, 1.3);
+  const stLabel = textSprite('Suv tozalash ✓', { px: 40, h: 0.8, bg: 'rgba(30,90,140,.85)' }); stLabel.position.set(0, 3.4, 0); station.add(stLabel);
+  station.visible = false; station.scale.setScalar(0.001);
+
+  // ---------- recycling bins ----------
+  const BIN_INFO = [['Plastik', 0xf2c230], ['Qog‘oz', 0x2f6fc2], ['Shisha', 0x2f9a57]];
+  const bins = BIN_INFO.map(([name, col], i) => {
+    const g = new THREE.Group(); g.position.set(1.4 + i * 1.8, 0, 9.2); world.add(g);
+    addMesh(new THREE.BoxGeometry(1.4, 1.5, 1.2), std(col, { roughness: .5 }), 0, 0.75, 0, g);
+    const lid = addMesh(new THREE.BoxGeometry(1.5, 0.12, 1.3), std(new THREE.Color(col).multiplyScalar(0.75), { roughness: .5 }), 0, 1.56, 0, g);
+    const lab = textSprite(name, { px: 40, h: 0.5 }); lab.position.set(0, 2.1, 0); g.add(lab);
+    return { g, lid, mouth: new V3(g.position.x, 1.7, g.position.z) };
+  });
+  addBox(0.6, 6.0, 8.5, 9.9);
+
+  // ---------- in-world information board ----------
+  const boardCanvas = document.createElement('canvas'); boardCanvas.width = 1400; boardCanvas.height = 860;
+  const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.encoding = THREE.sRGBEncoding; boardTex.anisotropy = Math.min(8, maxAniso);
+  let boardPhoto = null;
+  function drawBoard() {
+    const g = boardCanvas.getContext('2d'), W = 1400, H = 860;
+    g.fillStyle = '#16211c'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#f4f7f2'; g.font = '700 58px Unbounded, Arial Black, sans-serif'; g.textBaseline = 'top';
+    g.fillText('Filtr tutunni qanday tozalaydi?', 50, 40);
+    g.font = '500 30px Manrope, Arial, sans-serif'; g.fillStyle = 'rgba(244,247,242,.75)';
+    g.fillText('Zavod ishlashda davom etadi — zaharli gaz to‘rt bosqichda zararsizlanadi.', 52, 118);
+    const top = 190, bw = 250, bh = 300, gap = 22, x0 = 300;
+    // input
+    g.fillStyle = '#3b2e24'; roundRect(g, 50, top, 220, bh, 26); g.fill();
+    for (let i = 0; i < 40; i++) { g.fillStyle = ['#1d1612', '#5c4c22', '#2a2420'][i % 3]; g.beginPath(); g.arc(70 + Math.random() * 180, top + 90 + Math.random() * 190, 6 + Math.random() * 8, 0, 7); g.fill(); }
+    g.fillStyle = '#ffe2a8'; g.font = '700 30px Manrope, Arial'; g.fillText('Zaharli gaz', 66, top + 22);
+    g.font = '500 24px Manrope, Arial'; g.fillText('SO₂ · NOx · chang', 66, top + 58);
+    STAGES.forEach((s, i) => {
+      const x = x0 + i * (bw + gap);
+      g.fillStyle = s.css; roundRect(g, x, top, bw, bh, 26); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.18)'; roundRect(g, x + 12, top + 12, 54, 54, 14); g.fill();
+      g.fillStyle = '#fff'; g.font = '700 32px Unbounded, Arial'; g.fillText(String(i + 1), x + 28, top + 20);
+      g.font = '700 27px Manrope, Arial'; wrapText(g, s.name, x + 18, top + 84, bw - 36, 32);
+      g.font = '500 22px Manrope, Arial'; g.fillStyle = 'rgba(255,255,255,.92)';
+      wrapText(g, ['Chang va qurumni ushlaydi (99% gacha)', 'Ohak eritmasi SO₂ ni gipsga aylantiradi', 'NOx → azot (N₂) + suv (H₂O)', 'Simob va og‘ir metallarni yutadi'][i], x + 18, top + 160, bw - 36, 28);
+      // arrow
+      g.fillStyle = '#f4f7f2'; g.beginPath(); g.moveTo(x - gap + 2, top + bh / 2 - 12); g.lineTo(x - 2, top + bh / 2); g.lineTo(x - gap + 2, top + bh / 2 + 12); g.fill();
+    });
+    g.fillStyle = '#f4f7f2'; g.font = '700 34px Manrope, Arial';
+    g.fillText('Natija: mo‘ridan faqat oq suv bug‘i chiqadi.', 50, top + bh + 46);
+    g.font = '500 26px Manrope, Arial'; g.fillStyle = 'rgba(244,247,242,.8)';
+    wrapText(g, 'Ushlangan chang va gips qurilish materiallariga qayta ishlanadi. Filtrlar ishlashi uchun zavod uni muntazam tozalab, almashtirib turadi.', 50, top + bh + 100, boardPhoto ? 820 : W - 100, 34);
+    if (boardPhoto) {
+      try { g.save(); roundRect(g, 910, top + bh + 36, 440, 290, 20); g.clip(); const ir = boardPhoto.width / boardPhoto.height, w = 440, h = w / ir; g.drawImage(boardPhoto, 910, top + bh + 36 + (290 - h) / 2, w, h); g.restore();
+        g.font = '500 17px Manrope, Arial'; g.fillStyle = 'rgba(255,255,255,.75)'; g.fillText('Haqiqiy elektrostatik filtr ichi · LukaszKatlewa, CC BY-SA 3.0', 912, H - 26); } catch (e) { /* tainted canvas guard */ }
+    }
+    boardTex.needsUpdate = true;
+  }
+  function wrapText(g, text, x, y, maxW, lh) {
+    const words = text.split(' '); let line = '';
+    for (const w of words) { const test = line ? line + ' ' + w : w; if (g.measureText(test).width > maxW && line) { g.fillText(line, x, y); y += lh; line = w; } else line = test; }
+    if (line) g.fillText(line, x, y); return y;
+  }
+  drawBoard();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawBoard);
+  (function loadBoardPhoto() {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { boardPhoto = img; drawBoard(); };
+    img.src = PHOTOS.esp.src.replace('width=900', 'width=640');
+  })();
+  const board = new THREE.Group(); board.position.set(2.2, 0, 1); world.add(board);
+  const boardMesh = addMesh(new THREE.PlaneGeometry(7, 4.3), new THREE.MeshStandardMaterial({ map: boardTex, roughness: .8, emissive: 0xffffff, emissiveMap: boardTex, emissiveIntensity: 0.35 }), 0, 3.6, 0.06, board);
+  addMesh(new THREE.BoxGeometry(7.3, 4.6, 0.1), darkMetal, 0, 3.6, 0, board);
+  [-3.2, 3.2].forEach(x => addMesh(new THREE.CylinderGeometry(0.1, 0.1, 3.6, 8), darkMetal, x, 1.4, 0, board));
+  addBox(-1.5, 5.9, 0.7, 1.3);
+
+  // =====================================================================
+  // 8. Vegetation
+  // =====================================================================
+  const trunkMat = std(0xffffff, { map: barkTex, roughness: 1 });
+  const leafMats = ['#4f9e4f', '#63b35e', '#3f8a45', '#5aa64a'].map(c => std(c, { map: leafTex, roughness: .9 }));
+  const pineMat = std('#2f6e45', { map: leafTex, roughness: .9 });
+  const G = {
+    trunkR: new THREE.CylinderGeometry(0.26, 0.42, 3.4, 8), trunkP: new THREE.CylinderGeometry(0.22, 0.36, 3.2, 8),
+    crown: new THREE.IcosahedronGeometry(1, 2), cone: new THREE.ConeGeometry(1, 1, 10)
+  };
+  function makeTree(kind, s, parent = world) {
+    const g = new THREE.Group();
+    if (kind === 'pine') {
+      addMesh(G.trunkP, trunkMat, 0, 1.6, 0, g);
+      [[2.6, 3.0, 3.4], [2.1, 2.7, 5.0], [1.55, 2.4, 6.5], [0.95, 1.9, 7.8]].forEach(([r, h, y]) => { const c = addMesh(G.cone, pineMat, 0, y, 0, g); c.scale.set(r, h, r); });
+    } else {
+      addMesh(G.trunkR, trunkMat, 0, 1.7, 0, g);
+      [[0, 4.7, 0, 2.3], [1.3, 4.1, 0.6, 1.6], [-1.2, 4.2, -0.4, 1.7], [0.2, 5.7, -0.3, 1.5], [-0.4, 4.4, 1.2, 1.4]].forEach(([x, y, z, r], i) => {
+        const c = addMesh(G.crown, leafMats[(i + (s * 10 | 0)) % 4], x, y, z, g); c.scale.setScalar(r);
+      });
+    }
+    g.scale.setScalar(s); parent.add(g); return g;
+  }
+  const deadMat = std(0x3f2e22, { roughness: 1 });
+  const deadTrees = [];
+  function makeDeadTree(x, z, s) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s);
+    addMesh(new THREE.CylinderGeometry(0.18, 0.4, 5.6, 7), deadMat, 0, 2.8, 0, g);
+    for (let i = 0; i < 5; i++) {
+      const br = addMesh(new THREE.CylinderGeometry(0.06, 0.16, 2.4, 5), deadMat, 0, 3 + i * 0.6, 0, g);
+      br.rotation.z = (i % 2 ? 1 : -1) * (0.7 + rnd() * .3); br.rotation.y = rnd() * 6; br.translateY(1.1);
+    }
+    world.add(g); deadTrees.push(g); addCircle(x, z, 0.5 * s);
+  }
+  [[-19, 6, 1], [-24, 12, .9], [-6, 21, 1.1], [-27, 1, .8], [-6, -18, .9], [-23.5, -12, .85]].forEach(a => makeDeadTree(...a));
+
+  // healthy east side
+  const turbines = [];
+  function makeTurbine(x, z, s = 1) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); world.add(g);
+    const white = std(0xf3f5f6, { roughness: .45 });
+    addMesh(new THREE.CylinderGeometry(0.32, 0.7, 20, 16), white, 0, 10, 0, g);
+    addMesh(new THREE.BoxGeometry(1.1, 1.0, 2.6), white, 0, 20.3, 0.2, g);
+    const hub = new THREE.Group(); hub.position.set(0, 20.3, 1.6); g.add(hub);
+    hub.add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), white));
+    for (let k = 0; k < 3; k++) {
+      const bg = new THREE.BoxGeometry(0.55, 8.6, 0.14); bg.translate(0, 4.5, 0);
+      const b = new THREE.Mesh(bg, white); b.rotation.z = k * Math.PI * 2 / 3; b.castShadow = true; hub.add(b);
+    }
+    g.rotation.y = -0.6; addCircle(x, z, 0.9 * s);
+    turbines.push(hub); return g;
+  }
+  makeTurbine(24.5, -7, 1); makeTurbine(24, 6.5, 0.85);
+
+  const treeSpots = [];
+  for (let n = 0, tries = 0; n < 24 && tries < 2000; tries++) {
+    const x = 6 + rnd() * 24, z = -28 + rnd() * 56;
+    if (x * x + z * z > 26.5 ** 2 || nearRiver(x, z, 1.6) || blocked(x, z, 2.2)) continue;
+    if (treeSpots.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < 16)) continue;
+    const t = makeTree(rnd() < .45 ? 'pine' : 'round', 0.75 + rnd() * 0.45); t.position.set(x, 0, z); t.rotation.y = rnd() * 6;
+    treeSpots.push({ x, z }); addCircle(x, z, 0.5); n++;
+  }
+
+  // flowers and grass tufts grow back as the land heals
+  const MAXF = isMobileUA ? 380 : 620;
+  const flowerGeo = new THREE.SphereGeometry(0.13, 6, 4);
+  const flowers = new THREE.InstancedMesh(flowerGeo, std(0xffffff, { roughness: .7 }), MAXF);
+  const tuftGeo = new THREE.ConeGeometry(0.09, 0.7, 4); tuftGeo.translate(0, 0.35, 0);
+  const tufts = new THREE.InstancedMesh(tuftGeo, std(0x5c9b3c, { roughness: 1 }), MAXF);
+  const fData = [];
+  const FCOLS = ['#f4d03f', '#ff7aa2', '#ffffff', '#b388ff', '#ff8a3d', '#ffd1e8'].map(c => new THREE.Color(c));
+  for (let i = 0; i < MAXF; i++) {
+    let x, z, ok = false;
+    for (let k = 0; k < 30 && !ok; k++) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * (R - 2); x = Math.cos(a) * r; z = Math.sin(a) * r; ok = !blocked(x, z, 0.4) && !nearRiver(x, z, 0.3); }
+    const thr = x > 7 ? -1 : 0.25 + rnd() * 0.6;
+    fData.push({ x, z, thr, s: 0.7 + rnd() * 0.7, r: rnd() * 6 });
+    flowers.setColorAt(i, FCOLS[i % FCOLS.length]);
+  }
+  flowers.castShadow = false; tufts.castShadow = false; flowers.receiveShadow = true; tufts.receiveShadow = true;
+  world.add(flowers); world.add(tufts);
+  const dummy = new THREE.Object3D();
+  let lastFlowerEco = -1;
+  function updateFlowers(e) {
+    if (Math.abs(e - lastFlowerEco) < 0.008) return; lastFlowerEco = e;
+    fData.forEach((d, i) => {
+      const k = d.thr < 0 ? 1 : clamp((e - d.thr) / 0.15, 0, 1);
+      dummy.position.set(d.x, 0.1, d.z); dummy.rotation.set(0, d.r, 0); dummy.scale.setScalar(Math.max(0.0001, k * d.s)); dummy.updateMatrix();
+      flowers.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(d.x + 0.3, 0, d.z - 0.2); dummy.scale.set(Math.max(0.0001, k * d.s), Math.max(0.0001, k * d.s * 1.2), Math.max(0.0001, k * d.s)); dummy.updateMatrix();
+      tufts.setMatrixAt(i, dummy.matrix);
+    });
+    flowers.instanceMatrix.needsUpdate = true; tufts.instanceMatrix.needsUpdate = true;
+  }
+
+  // birds & butterflies
+  const birds = new THREE.Group(); world.add(birds);
+  const wingGeo = new THREE.BufferGeometry(); wingGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.25, 0, 0, -0.25, 1.1, 0, 0], 3)); wingGeo.computeVertexNormals();
+  const birdMat = std(0x2b2b2b, { side: THREE.DoubleSide });
+  for (let i = 0; i < 9; i++) {
+    const b = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 6), birdMat); body.rotation.x = Math.PI / 2; b.add(body);
+    const wl = new THREE.Mesh(wingGeo, birdMat), wr = new THREE.Mesh(wingGeo, birdMat); wr.scale.x = -1; b.add(wl); b.add(wr);
+    b.userData = { ph: i * 0.7, wl, wr, r: 14 + (i % 3) * 5, h: 20 + (i % 4) * 2.2 };
+    birds.add(b);
+  }
+  const butterflies = new THREE.Group(); world.add(butterflies);
+  for (let i = 0; i < 12; i++) {
+    const m = std(['#ffcf3f', '#ff8fb1', '#9fd8ff', '#ffffff'][i % 4], { side: THREE.DoubleSide, emissive: 0x222222 });
+    const b = new THREE.Group();
+    const w1 = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.22), m); w1.position.x = 0.14;
+    const w2 = w1.clone(); w2.position.x = -0.14;
+    const p1 = new THREE.Group(); p1.add(w1); const p2 = new THREE.Group(); p2.add(w2); b.add(p1); b.add(p2);
+    b.userData = { p1, p2, cx: -24 + rnd() * 30, cz: -6 + rnd() * 30, ph: rnd() * 6 };
+    butterflies.add(b);
+  }
+
+  // =====================================================================
+  // 9. Interactive tasks
+  // =====================================================================
+  const TASKS = {
+    filters: { icon: '⚙️', ring: '#e9836f', title: 'Mo‘rilarga filtr o‘rnatish', sub: 'Zavodlar ishlaydi, tutun tozalanadi', total: 0, done: 0, weight: 40, verb: 'Filtr o‘rnatish' },
+    water:   { icon: '💧', ring: '#3a9ad9', title: 'Oqova suvni tozalash', sub: 'Ko‘lni qutqaring', total: 0, done: 0, weight: 10, verb: 'Tozalash stansiyasini qurish' },
+    trash:   { icon: '♻️', ring: '#e8c26a', title: 'Chiqindini saralash', sub: 'Plastik, qog‘oz, shisha', total: 0, done: 0, weight: 20, verb: 'Konteynerga tashlash' },
+    trees:   { icon: '🌱', ring: '#7fd18b', title: 'Daraxt ekish', sub: 'Yashil qalqon', total: 0, done: 0, weight: 20, verb: 'Ko‘chat ekish' },
+    energy:  { icon: '☀️', ring: '#ffc94a', title: 'Yashil energiya', sub: 'Quyosh va shamol', total: 0, done: 0, weight: 10, verb: 'Qurish' }
+  };
+  const items = [];
+  const hitGeo = new THREE.SphereGeometry(1, 12, 8);
+  const hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+  const iconTexCache = {};
+  function addItem(kind, x, y, z, radius, act, extra = {}) {
+    const T = TASKS[kind]; T.total++;
+    const tex = iconTexCache[kind] || (iconTexCache[kind] = iconTex(T.icon, T.ring));
+    const marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+    marker.center.set(0.5, 0); const ms = extra.markerScale || 1.5; marker.scale.set(ms, ms * 1.25, 1); marker.position.set(x, y, z); marker.renderOrder = 5;
+    world.add(marker);
+    const hit = new THREE.Mesh(hitGeo, hitMat); hit.scale.setScalar(radius); hit.position.set(x, y + ms * 0.55, z); world.add(hit);
+    const it = Object.assign({ kind, marker, hit, act, done: false, baseY: y, ms, ph: Math.random() * 6, label: T.verb }, extra);
+    hit.userData.item = it; items.push(it); return it;
+  }
+
+  // (a) filters
+  let shownCard = {};
+  chimneys.forEach((ch, i) => {
+    addItem('filters', ch.x, 9, ch.z + 1.8, 2.0, () => {
+      const T = ch.tower; T.g.visible = true;
+      tween(2.4, k => T.g.scale.set(1, Math.max(0.001, easeOutBack(k)), 1));
+      ch.fTarget = 1;
+      return 'Filtr o‘rnatildi! Endi bu mo‘ridan zaharli gaz emas, oq suv bug‘i chiqadi.';
+    }, { label: 'Filtr o‘rnatish', card: 'filters', markerScale: 1.8 });
+  });
+  // (b) water treatment
+  addItem('water', -5.8, 2.6, 3.6, 2.0, () => {
+    station.visible = true; tween(2.0, k => station.scale.setScalar(Math.max(0.001, easeOutBack(k))));
+    pondTarget = 1; return 'Tozalash stansiyasi ishga tushdi — oqova suv endi ko‘lga toza holda tushadi.';
+  }, { label: 'Tozalash stansiyasini qurish', card: 'water' });
+  // (c) trash
+  const trashGroup = new THREE.Group(); world.add(trashGroup);
+  const TRASH_TYPES = [
+    { bin: 0, make: () => { const g = new THREE.Group(); addMesh(new THREE.CylinderGeometry(0.16, 0.16, 0.6, 10), std(0xf2e9a0, { transparent: true, opacity: .8, roughness: .2 }), 0, 0, 0, g); addMesh(new THREE.CylinderGeometry(0.07, 0.1, 0.18, 8), std(0x2266cc), 0, 0.38, 0, g); return g; } },
+    { bin: 1, make: () => { const g = new THREE.Group(); addMesh(new THREE.BoxGeometry(0.7, 0.4, 0.55), std(0xb48a5a, { roughness: 1 }), 0, 0, 0, g); return g; } },
+    { bin: 2, make: () => { const g = new THREE.Group(); addMesh(new THREE.CylinderGeometry(0.15, 0.15, 0.55, 10), std(0x2f7a46, { transparent: true, opacity: .85, roughness: .1, metalness: .2 }), 0, 0, 0, g); addMesh(new THREE.CylinderGeometry(0.06, 0.13, 0.25, 8), std(0x2f7a46, { transparent: true, opacity: .85 }), 0, 0.38, 0, g); return g; } },
+    { bin: 0, make: () => { const g = new THREE.Group(); const c = addMesh(new THREE.CylinderGeometry(0.13, 0.13, 0.35, 10), std(0xc9463d, { metalness: .7, roughness: .3 }), 0, 0, 0, g); c.scale.y = 0.6; return g; } },
+    { bin: 1, make: () => { const g = new THREE.Group(); addMesh(new THREE.BoxGeometry(0.6, 0.05, 0.8), std(0xe8e4d8, { roughness: 1 }), 0, 0, 0, g); return g; } }
+  ];
+  const PLANT = [[-22, 3], [-21, 15.5], [-9, 18], [-3, 14], [-25.5, -6], [-3.5, -14], [-17, 21], [-26, 9], [-13, 24], [-5.5, -4]];
+  const trashSpots = [];
+  for (let n = 0, tries = 0; n < 14 && tries < 4000; tries++) {
+    const x = -26 + rnd() * 30, z = -10 + rnd() * 36;
+    if (x * x + z * z > 26 ** 2 || blocked(x, z, 1.6) || inPond(x, z, 1.5) || nearRiver(x, z, 2)) continue;
+    if (Math.abs(x) < 3 && z > 17) continue; // keep the spawn clear
+    if (PLANT.some(([px, pz]) => (px - x) ** 2 + (pz - z) ** 2 < 7) || (x + 5) ** 2 + (z - 25.2) ** 2 < 10) continue;
+    if (trashSpots.some(p => (p.x - x) ** 2 + (p.z - z) ** 2 < 12)) continue;
+    trashSpots.push({ x, z }); n++;
+  }
+  trashSpots.forEach((p, i) => {
+    const type = TRASH_TYPES[i % TRASH_TYPES.length], obj = type.make();
+    obj.position.set(p.x, 0.18, p.z); obj.rotation.set(Math.PI / 2 * (i % 2), rnd() * 6, 0); trashGroup.add(obj);
+    addItem('trash', p.x, 1.0, p.z, 1.2, () => {
+      const from = obj.position.clone(), to = bins[type.bin].mouth, rot0 = obj.rotation.x;
+      tween(1.1, k => { obj.position.lerpVectors(from, to, k); obj.position.y += Math.sin(k * Math.PI) * 5; obj.rotation.x = rot0 + k * 8; },
+        () => { obj.visible = false; const lid = bins[type.bin].lid; tween(0.5, k => { lid.rotation.x = -Math.sin(k * Math.PI) * 0.8; }); });
+      return BIN_INFO[type.bin][0] + ' konteyneriga saralandi. Qayta ishlangan chiqindi — yangi xomashyo.';
+    }, { label: 'Konteynerga tashlash (' + BIN_INFO[type.bin][0] + ')', card: 'trash', markerScale: 1.1 });
+  });
+  // (d) planting spots
+  const soilMat = std(0x4a3426, { roughness: 1 });
+  PLANT.forEach(([x, z], i) => {
+    const mound = addMesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), soilMat, x, 0, z); mound.scale.set(1.1, 0.35, 1.1);
+    const sT = 0.9 + (i % 4) * 0.08;
+    const tree = makeTree(i % 3 === 1 ? 'pine' : 'round', sT); tree.position.set(x, 0, z); tree.rotation.y = i; tree.visible = false;
+    addItem('trees', x, 1.0, z, 1.4, () => {
+      tree.visible = true; tree.scale.setScalar(0.02 * sT);
+      tween(2.8, k => { tree.scale.setScalar(Math.max(0.02, easeOutBack(k)) * sT); mound.scale.y = 0.35 * (1 - k * 0.6); });
+      addCircle(x, z, 0.5);
+      return 'Ko‘chat ekildi. Yetuk daraxt yiliga taxminan 20 kg CO₂ yutadi va changni ushlaydi.';
+    }, { label: 'Ko‘chat ekish', card: 'trees' });
+  });
+  // (e) green energy: rooftop solar on both factories + one wind turbine
+  function makeRoofSolar(hall) {
+    const g = new THREE.Group(); g.position.set(hall.cx, hall.h + 0.5, hall.cz); world.add(g);
+    const pm = std(0xffffff, { map: solarTex, roughness: .25, metalness: .5 }); envMats.push(pm);
+    const cols = Math.floor((hall.w - 2) / 2.4), rows = Math.floor((hall.d - 3) / 1.9);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const p = addMesh(new THREE.BoxGeometry(2.2, 0.08, 1.4), pm, -hall.w / 2 + 1.6 + c * 2.4, 0.5, -hall.d / 2 + 1.4 + r * 1.9, g);
+      p.rotation.x = -0.45;
+      addMesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), metalMat, p.position.x, 0.25, p.position.z, g);
+    }
+    g.visible = false; g.scale.setScalar(0.001); return g;
+  }
+  [hallA, hallB].forEach(h => {
+    const g = makeRoofSolar(h);
+    addItem('energy', h.cx, h.h + 2.4, h.cz, 2.4, () => {
+      g.visible = true; tween(1.8, k => g.scale.setScalar(Math.max(0.001, easeOutBack(k))));
+      return 'Zavod tomiga quyosh panellari o‘rnatildi — kamroq yoqilg‘i, kamroq tutun.';
+    }, { label: 'Quyosh panellarini o‘rnatish', card: 'energy', markerScale: 1.8 });
+  });
+  const newTurbine = makeTurbine(-5, 25.2, 0.8); newTurbine.visible = false; newTurbine.position.y = -18;
+  addItem('energy', -5, 2.2, 25.2, 2.0, () => {
+    newTurbine.visible = true; tween(2.6, k => { newTurbine.position.y = lerp(-18, 0, smooth(k)); });
+    return 'Shamol turbinasi ishga tushdi — toza elektr energiyasi.';
+  }, { label: 'Shamol turbinasini qurish', card: 'energy' });
+
+  // beacon to guide the player
+  const beaconMat = new THREE.MeshBasicMaterial({ color: 0x9cff9c, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide });
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 60, 18, 1, true), beaconMat); beacon.visible = false; world.add(beacon);
+  let beaconT = 0;
+  function showBeacon(it) { beacon.position.set(it.hit.position.x, 30, it.hit.position.z); beacon.visible = true; beaconT = 9; }
+
+  // =====================================================================
+  // 10. Tween system, eco state
+  // =====================================================================
+  const tweens = [];
+  function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+  function stepTweens(dt) {
+    for (let i = tweens.length - 1; i >= 0; i--) {
+      const tw = tweens[i]; tw.t += dt; const k = Math.min(1, tw.t / tw.dur); tw.fn(k);
+      if (k >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+    }
+  }
+  let eco = 0, ecoTarget = 0;
+  function computeEco() { let s = 0; for (const k in TASKS) { const T = TASKS[k]; s += T.weight * (T.total ? T.done / T.total : 0); } return s / 100; }
+  const LEVELS = [[0.2, 'Juda ifloslangan', '#e9836f'], [0.45, 'Ifloslangan', '#e8c26a'], [0.75, 'Yaxshilanmoqda', '#c6e27a'], [0.999, 'Deyarli toza', '#9fe79a'], [2, 'Toza — tabiat tiklandi', '#8ff0a0']];
+
+  function applyEco(e) {
+    const s = smooth(clamp(e, 0, 1));
+    if (envMode === 'full') {
+      const fogBase = mode === 'orbit' ? Math.max(0, orbit.dist * 0.75 - 10) : 0;
+      scene.fog.color.copy(fogDirty).lerp(fogClean, s);
+      scene.fog.near = fogBase + lerp(6, 80, s); scene.fog.far = fogBase + lerp(70, 460, s);
+      domeMat.color.copy(scene.fog.color); domeMat.opacity = 0.93 * (1 - s); dome.visible = domeMat.opacity > 0.01;
+      renderer.setClearColor(scene.fog.color, 1);
+    }
+    hemi.intensity = lerp(0.35, 0.72, s); sun.intensity = lerp(0.55, 1.35, s);
+    sun.color.setRGB(1, lerp(0.8, 0.96, s), lerp(0.6, 0.86, s));
+    dirtMat.opacity = clamp(1 - s * 1.08, 0, 1); dirt.visible = dirtMat.opacity > 0.01;
+    grassMat.color.setRGB(lerp(0.78, 1, s), lerp(0.7, 1, s), lerp(0.5, 1, s));
+    oceanMat.color.copy(oceanDirty).lerp(oceanClean, s);
+    smog.forEach(m => { m.material.opacity = 0.6 * Math.pow(1 - s, 1.3); m.visible = m.material.opacity > 0.01; });
+    deadTrees.forEach(t => { const k = Math.max(0.001, 1 - s * 1.6); t.scale.setScalar(k); t.visible = k > 0.01; });
+    birds.visible = s > 0.62; butterflies.visible = s > 0.75;
+    updateFlowers(s);
+  }
+
+  // =====================================================================
+  // 11. Audio (synthesised, no files)
+  // =====================================================================
+  let actx = null, soundOn = true;
+  function ac() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (actx.state === 'suspended') actx.resume(); return actx; }
+  function tone(f, t0, dur, type = 'sine', vol = 0.12) {
+    const a = ac(); if (!a || !soundOn) return; const t = a.currentTime + t0;
+    const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  const chime = () => [523.25, 659.25, 783.99].forEach((f, i) => tone(f, i * 0.08, 0.6, 'triangle', 0.1));
+  const nope = () => { tone(220, 0, 0.18, 'square', 0.04); tone(196, 0.12, 0.2, 'square', 0.04); };
+  const fanfare = () => [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((f, i) => tone(f, i * 0.13, 0.7, 'triangle', 0.1));
+  function chirp() {
+    const a = ac(); if (!a || !soundOn) return;
+    for (let k = 0; k < 2 + (Math.random() * 3 | 0); k++) {
+      const t = a.currentTime + k * 0.13, o = a.createOscillator(), g = a.createGain();
+      o.frequency.setValueAtTime(2600 + Math.random() * 800, t); o.frequency.exponentialRampToValueAtTime(4200 + Math.random() * 600, t + 0.07);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.025, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + 0.1);
+    }
+  }
+  let nextChirp = 4;
+
+  // =====================================================================
+  // 12. HTML HUD
+  // =====================================================================
+  const toastEl = $('#toast'); let toastTimer = 0, lastMsg = 'Orolni o‘rganing: belgilar yonidagi vazifalarni bajaring.';
+  function toast(msg, sec = 4.5) { lastMsg = msg; toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), sec * 1000); hudDirty = true; }
+  function renderTasks() {
+    const ul = $('#taskList'); ul.innerHTML = '';
+    let d = 0, t = 0;
+    for (const k in TASKS) {
+      const T = TASKS[k]; d += T.done; t += T.total;
+      const li = document.createElement('li');
+      const b = document.createElement('button'); b.className = 'task' + (T.done === T.total ? ' done' : '');
+      b.innerHTML = `<span class="ic">${T.icon}</span><span class="tx">${T.title}<small>${T.sub}</small></span><span class="ct">${T.done}/${T.total}</span>`;
+      b.addEventListener('click', () => guideTo(k)); li.appendChild(b); ul.appendChild(li);
+    }
+    $('#tasksSum').textContent = d + '/' + t;
+  }
+  function updateMeter(e) {
+    const pct = Math.round(e * 100), lv = LEVELS.find(l => e < l[0]);
+    $('#ecoBar').style.width = pct + '%'; $('#barWrap').setAttribute('aria-valuenow', pct);
+    $('#ecoPct').textContent = pct + '%';
+    const aqi = Math.round(lerp(285, 22, e)); const aq = $('#aqi'); aq.textContent = 'AQI ' + aqi; aq.style.color = lv[2];
+    const lb = $('#ecoLabel'); lb.textContent = lv[1];
+  }
+  $('#tasksToggle').addEventListener('click', () => { const t = $('#tasks'); t.classList.toggle('open'); $('#tasksToggle').setAttribute('aria-expanded', t.classList.contains('open')); });
+
+  // ---------- info cards ----------
+  const CARDS = {
+    filters: { photo: 'esp', html: `<h3>Zavod ishlaydi — zahar chiqmaydi</h3><p>Mo‘riga ko‘p bosqichli tozalash tizimi ulandi. Tutun avval filtr minorasidan o‘tadi:</p>
+      <ol><li style="--c:#8a96a3"><b>Elektrostatik filtr</b>Chang va qurum zarralari (PM2.5, PM10) zaryadlanib plastinalarga yopishadi — 99% gacha ushlanadi.</li>
+      <li style="--c:#3f9fd8"><b>Ho‘l skrubber</b>Ohak (CaCO₃) eritmasi oltingugurt dioksidini (SO₂) zararsiz gipsga aylantiradi.</li>
+      <li style="--c:#e39a3b"><b>Katalitik reaktor (SCR)</b>Azot oksidlari (NOx) katalizatorda azot (N₂) va suvga (H₂O) aylanadi.</li>
+      <li style="--c:#3b3b3b"><b>Faollangan ko‘mir</b>Simob, og‘ir metallar va organik zaharlarni yutib oladi.</li></ol>
+      <p>Natijada mo‘ridan oq suv bug‘i chiqadi. Minoradagi zarrachalar rangi qanday o‘zgarayotganini yaqindan ko‘ring.</p>` },
+    water: { photo: 'water', html: `<h3>Oqova suv tozalandi</h3><p>Zavod suvi endi to‘g‘ridan-to‘g‘ri ko‘lga tushmaydi. Stansiyada u bosqichma-bosqich tozalanadi:</p>
+      <ol><li style="--c:#7c8a96"><b>Panjara va qum tutgich</b>Yirik chiqindi va qum ajratiladi.</li><li style="--c:#3f9fd8"><b>Tindirgich</b>Og‘ir zarralar cho‘kadi, yog‘ yuzadan yig‘iladi.</li>
+      <li style="--c:#5aa35c"><b>Biologik tozalash</b>Foydali bakteriyalar organik ifloslikni parchalaydi.</li><li style="--c:#8b6fd6"><b>UV zararsizlantirish</b>Ultrabinafsha nur mikroblarni yo‘q qiladi.</li></ol>` },
+    trash: { photo: null, html: `<h3>Chiqindini saralang</h3><p>Sariq konteyner — plastik va metall, ko‘k — qog‘oz va karton, yashil — shisha. Saralangan chiqindi qayta ishlanadi va yangi buyumga aylanadi.</p><p>Bir tonna qog‘ozni qayta ishlash o‘nlab daraxtni kesishdan saqlab qoladi.</p>` },
+    trees: { photo: null, html: `<h3>Daraxtlar — tabiiy filtr</h3><p>Daraxt barglari changni ushlaydi, havoni namlaydi va CO₂ ni yutib kislorod chiqaradi. Zavod atrofidagi yashil zona shamol olib kelgan changdan aholini himoya qiladi.</p>` },
+    energy: { photo: 'wind', html: `<h3>Toza energiya</h3><p>Zavod tomidagi quyosh panellari va shamol turbinasi elektrning bir qismini beradi. Ko‘mir va gaz kamroq yoqiladi — demak, tutun ham kamroq.</p>` },
+    finale: { photo: 'wind', html: `<h3>Tabiat tiklandi!</h3><p>Ikkala zavod ishlashda davom etmoqda — odamlar ish bilan, mamlakat mahsulot bilan ta’minlangan. Ammo endi mo‘rilardan faqat suv bug‘i chiqadi, ko‘l toza, yer yashil, qushlar qaytdi.</p><p>Haqiqiy hayotda ham shunday: sanoat va toza tabiat yonma-yon yashashi mumkin — buning uchun filtr, nazorat va mas’uliyat kerak.</p>` },
+    help: { photo: null, html: `<h3>Qanday o‘ynaladi</h3>
+      <p><b>Sayr (kompyuter):</b> sahnaga bosing, keyin WASD yoki strelkalar — yurish, sichqoncha — qarash, Shift — yugurish, E yoki sichqoncha tugmasi — vazifani bajarish, Esc — kursorni bo‘shatish.</p>
+      <p><b>Sayr (telefon):</b> chapdagi joystik — yurish, ekranni surish — qarash, belgini bosing yoki “Bajarish” tugmasi.</p>
+      <p><b>VR shlem:</b> chap tutqich — yurish, o‘ng tutqich — burilish, nur bilan yerga ko‘rsatib trigger — teleport, belgiga ko‘rsatib trigger — bajarish.</p>
+      <p><b>AR:</b> telefonni pol/stol ustida aylantiring, halqa paydo bo‘lgach bosing — orol joylashadi. So‘ng belgilarni bosing.</p>
+      <p><b>Karton VR:</b> telefonni yotqizib ko‘zoynakka soling. Belgiga 1,5 soniya qarab turing — bajariladi. Ekranga bosish — yurish/to‘xtash.</p>
+      <p>Vazifalar ro‘yxatidagi qatorni bossangiz, keyingi joy yashil nur bilan ko‘rsatiladi. Sayr va VR rejimida vazifani bajarish uchun unga 15 m dan yaqin boring.</p>` },
+    novr: { photo: null, html: `<h3>VR shlem topilmadi</h3><p>Bu brauzer WebXR immersive-vr rejimini qo‘llamayapti. Variantlar:</p><ol><li style="--c:#2f7d4f"><b>Meta Quest / Pico</b>Shlemdagi brauzerda shu sahifani oching va “VR shlem” tugmasini bosing.</li><li style="--c:#2f7d4f"><b>Telefon + karton ko‘zoynak</b>“Karton VR” rejimini tanlang.</li></ol>` },
+    noar: { photo: null, html: `<h3>WebXR AR qo‘llanmaydi</h3><p>To‘liq AR uchun Android telefonda Chrome va “Google Play Services for AR” kerak. iPhone’da “Kamera AR” rejimidan foydalaning — orol kamera tasviri ustida ko‘rinadi.</p>` }
+  };
+  function openCard(key) {
+    const c = CARDS[key]; if (!c) return;
+    const fig = $('#cardFig'), img = $('#cardImg');
+    if (c.photo) { fig.classList.remove('noimg'); img.src = PHOTOS[c.photo].src; img.alt = ''; $('#cardCap').textContent = PHOTOS[c.photo].cap; }
+    else { fig.classList.add('noimg'); img.removeAttribute('src'); $('#cardCap').textContent = ''; }
+    $('#cardBody').innerHTML = c.html; $('#card').classList.add('show');
+  }
+  const closeCard = () => $('#card').classList.remove('show');
+  $('#cardClose').addEventListener('click', closeCard);
+  $('#cardImg').addEventListener('error', () => $('#cardFig').classList.add('noimg'));
+
+  // =====================================================================
+  // 13. In-headset HUD (canvas on a plane)
+  // =====================================================================
+  const hudCanvas = document.createElement('canvas'); hudCanvas.width = 1024; hudCanvas.height = 640;
+  const hudTex = new THREE.CanvasTexture(hudCanvas); hudTex.encoding = THREE.sRGBEncoding;
+  const hud = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.1875), new THREE.MeshBasicMaterial({ map: hudTex, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  hud.renderOrder = 999; hud.visible = false;
+  let hudDirty = true, hoverLabel = '';
+  function drawHud() {
+    const g = hudCanvas.getContext('2d'), W = 1024, H = 640;
+    g.clearRect(0, 0, W, H); g.fillStyle = 'rgba(16,24,20,.88)'; roundRect(g, 4, 4, W - 8, H - 8, 44); g.fill();
+    g.textBaseline = 'top'; g.fillStyle = '#f4f7f2'; g.font = '700 46px Unbounded, Arial Black, sans-serif'; g.fillText('Ekologik vaziyat', 40, 34);
+    const lv = LEVELS.find(l => eco < l[0]);
+    g.font = '700 38px Manrope, Arial'; g.fillStyle = lv[2]; g.fillText('AQI ' + Math.round(lerp(285, 22, eco)) + ' · ' + lv[1], 40, 104);
+    g.fillStyle = 'rgba(255,255,255,.12)'; roundRect(g, 40, 160, W - 80, 22, 11); g.fill();
+    const gr = g.createLinearGradient(40, 0, W - 40, 0); gr.addColorStop(0, '#6b5a4e'); gr.addColorStop(.45, '#a08a5c'); gr.addColorStop(.75, '#2f7d4f'); gr.addColorStop(1, '#7fd18b');
+    g.fillStyle = gr; roundRect(g, 40, 160, Math.max(22, (W - 80) * eco), 22, 11); g.fill();
+    let y = 206; g.font = '600 34px Manrope, Arial';
+    for (const k in TASKS) { const T = TASKS[k]; g.fillStyle = T.done === T.total ? '#8ff0a0' : '#f4f7f2'; g.fillText(T.title, 40, y); g.fillStyle = T.done === T.total ? '#8ff0a0' : '#e8c26a'; g.textAlign = 'right'; g.fillText(T.done + '/' + T.total, W - 40, y); g.textAlign = 'left'; y += 46; }
+    g.font = '500 30px Manrope, Arial'; g.fillStyle = hoverLabel ? '#7fd18b' : 'rgba(244,247,242,.8)';
+    wrapText(g, hoverLabel ? 'Trigger: ' + hoverLabel : lastMsg, 40, y + 14, W - 80, 36);
+    hudTex.needsUpdate = true; hudDirty = false;
+  }
+
+  // =====================================================================
+  // 14. Interaction core
+  // =====================================================================
+  const raycaster = new THREE.Raycaster(); raycaster.camera = camera;
+  const tmpV = new V3(), tmpV2 = new V3(), tmpM = new THREE.Matrix4();
+  const activeHits = () => items.filter(it => !it.done).map(it => it.hit);
+  function firstItemHit(maxDist = Infinity) {
+    const hits = raycaster.intersectObjects(activeHits(), false);
+    return hits.length && hits[0].distance < maxDist ? hits[0].object.userData.item : null;
+  }
+  function pickAlongRay() {
+    const it = firstItemHit(); if (it || envMode !== 'ar') return it;
+    let best = null, bd = Infinity; const s = world.scale.x;
+    for (const i of items) { if (i.done) continue; i.hit.getWorldPosition(tmpV); const d = raycaster.ray.distanceToPoint(tmpV) / s; if (d < 3.5 && d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  const firstPerson = () => mode === 'walk' || mode === 'vr' || mode === 'cardboard';
+  function playerPos(out) {
+    if (mode === 'vr') { camera.getWorldPosition(out); return out; }
+    return out.set(player.x, 0, player.z);
+  }
+  const REACH = 15;
+  function interact(it) {
+    if (!it || it.done) return;
+    if (firstPerson()) {
+      playerPos(tmpV); const d = Math.hypot(tmpV.x - it.hit.position.x, tmpV.z - it.hit.position.z);
+      if (d > REACH) { toast('Yaqinroq boring — ' + Math.round(d) + ' m. Vazifani bajarish uchun 15 m dan yaqin turing.'); nope(); return; }
+    }
+    it.done = true; it.marker.visible = false;
+    const msg = it.act(); TASKS[it.kind].done++;
+    ecoTarget = computeEco(); renderTasks(); chime(); toast(msg);
+    if (beacon.visible && Math.abs(beacon.position.x - it.hit.position.x) < 0.1 && Math.abs(beacon.position.z - it.hit.position.z) < 0.1) beaconT = Math.min(beaconT, 0.6);
+    if (it.card && !shownCard[it.card] && mode !== 'cardboard') { shownCard[it.card] = true; openCard(it.card); }
+    const T = TASKS[it.kind];
+    if (T.done === T.total && ecoTarget < 0.999) setTimeout(() => toast('“' + T.title + '” bajarildi! ' + T.icon), 1600);
+    if (items.every(i => i.done)) setTimeout(() => { fanfare(); toast('Tabiat tiklandi! Zavodlar ishlaydi, havo toza. Rahmat, ekolog!', 8); if (mode !== 'cardboard') openCard('finale'); }, 1400);
+    hudDirty = true;
+  }
+  function guideTo(kind) {
+    const list = items.filter(it => it.kind === kind && !it.done);
+    if (!list.length) { toast('Bu vazifa bajarilgan ✓'); return; }
+    playerPos(tmpV);
+    list.sort((a, b) => a.hit.position.distanceToSquared(tmpV) - b.hit.position.distanceToSquared(tmpV));
+    const it = list[0]; showBeacon(it);
+    if (mode === 'orbit') { orbit.goal.set(it.hit.position.x, Math.min(it.hit.position.y, 6), it.hit.position.z); orbit.distGoal = 42; orbit.auto = false; orbit.last = performance.now(); }
+    else if (firstPerson()) { const d = Math.hypot(tmpV.x - it.hit.position.x, tmpV.z - it.hit.position.z); toast('Yashil nur tomon yuring — ' + Math.round(d) + ' m.'); }
+    else toast('Yashil nur bilan belgilandi.');
+    if (window.innerWidth < 760) $('#tasks').classList.remove('open');
+  }
+
+  // =====================================================================
+  // 15. Modes & controls
+  // =====================================================================
+  let mode = 'intro', envMode = 'full';
+  const MODE_NAMES = { orbit: 'Kuzatuv rejimi', walk: 'Sayr rejimi', vr: 'VR rejimi', ar: 'AR rejimi', cardboard: 'Karton VR', camar: 'Kamera AR' };
+  const SPAWN = { x: 0, z: 22, yaw: 0 };
+  const player = { x: SPAWN.x, z: SPAWN.z, yaw: SPAWN.yaw, pitch: -0.05, eye: 1.65 };
+  const orbit = { theta: -0.35, phi: 1.0, dist: 88, distGoal: 88, target: new V3(-3, 4, 0), goal: new V3(-3, 4, 0), auto: !reduceMotion, last: 0 };
+  const keys = new Set();
+  let xrSupport = { vr: false, ar: false };
+
+  function applyEnvironment() {
+    if (envMode === 'full') {
+      scene.background = skyCube || skyFallback; ocean.visible = true; catcher.visible = false;
+      renderer.setClearAlpha(1);
+    } else {
+      scene.background = null; ocean.visible = false; dome.visible = false; catcher.visible = true;
+      scene.fog.near = 1e5; scene.fog.far = 2e5;
+      renderer.setClearColor(0x000000, 0);
+    }
+  }
+  function setEnv(m) { envMode = m; applyEnvironment(); applyEco(eco); setShadowFrame(); }
+  function resetWorldTransform() { world.position.set(0, 0, 0); world.rotation.set(0, 0, 0); world.scale.setScalar(1); world.visible = true; setShadowFrame(); }
+
+  function setDockState() {
+    document.querySelectorAll('.dock [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    $('#modeName').textContent = MODE_NAMES[mode] || '';
+  }
+  function enterMode(m) {
+    const prev = mode;
+    if (prev === 'walk' && document.pointerLockElement) document.exitPointerLock();
+    if (prev === 'camar' && m !== 'camar') stopCamera();
+    if (prev === 'cardboard' && m !== 'cardboard') { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); try { screen.orientation.unlock(); } catch (e) {} }
+    mode = m; document.body.dataset.mode = m; $('#intro').classList.add('hidden');
+    hoverTarget = null; setHover(null);
+    if (m === 'orbit' || m === 'walk' || m === 'cardboard') { setEnv('full'); resetWorldTransform(); }
+    if (m === 'walk' || m === 'cardboard') { camera.rotation.order = 'YXZ'; }
+    if (m === 'cardboard') { walking = false; headingOffset = null; updateWalkFlag(); }
+    resize(); setDockState(); hudDirty = true;
+  }
+
+  // ---------- pointer (orbit / walk / camar / cardboard) ----------
+  const pointers = new Map(); let down = null, pinch0 = 0, dist0 = 0, scale0 = 0;
+  const ndc = new THREE.Vector2();
+  function screenRay(x, y) { ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1); raycaster.setFromCamera(ndc, camera); }
+  canvas.addEventListener('pointerdown', e => {
+    ac(); canvas.focus({ preventScroll: true });
+    if (mode === 'walk' && e.pointerType === 'mouse') {
+      if (!document.pointerLockElement) { canvas.requestPointerLock && canvas.requestPointerLock(); }
+      return;
+    }
+    canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    down = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
+    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = orbit.distGoal; scale0 = world.scale.x; }
+    orbit.auto = false;
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) { if (e.pointerType === 'mouse' && (mode === 'orbit' || mode === 'camar')) hoverAt(e.clientX, e.clientY); return; }
+    const p = pointers.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY; if (down) down.moved += Math.abs(dx) + Math.abs(dy);
+    if (pointers.size === 1) {
+      if (mode === 'orbit') { orbit.theta -= dx * 0.006; orbit.phi = clamp(orbit.phi - dy * 0.005, 0.25, 1.45); }
+      else if (mode === 'walk' || (mode === 'cardboard' && !ori.has)) { player.yaw -= dx * 0.005; player.pitch = clamp(player.pitch - dy * 0.004, -1.2, 1.2); }
+      else if (mode === 'camar') { world.rotation.y += dx * 0.008; }
+    } else if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (mode === 'orbit') orbit.distGoal = clamp(dist0 * pinch0 / d, 26, 150);
+      if (mode === 'camar') { const s = clamp(scale0 * d / pinch0, 0.008, 0.09); world.scale.setScalar(s); placeCamAR(); }
+    }
+    orbit.last = performance.now();
+  });
+  const pointerUp = e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if (down && down.moved < 10 && performance.now() - down.t < 450 && pointers.size === 0) onTap(e.clientX, e.clientY);
+    if (pointers.size === 0) down = null; orbit.last = performance.now();
+  };
+  canvas.addEventListener('pointerup', pointerUp); canvas.addEventListener('pointercancel', pointerUp);
+  canvas.addEventListener('wheel', e => { if (mode !== 'orbit') return; e.preventDefault(); orbit.distGoal = clamp(orbit.distGoal * (1 + e.deltaY * 0.001), 26, 150); orbit.auto = false; orbit.last = performance.now(); }, { passive: false });
+
+  function onTap(x, y) {
+    if (mode === 'cardboard') { walking = !walking; updateWalkFlag(); return; }
+    screenRay(x, y);
+    const it = pickAlongRay();
+    if (it) interact(it);
+  }
+  let hoverTarget = null;
+  function setHover(it, x, y) {
+    if (it === hoverTarget && it) { if (x !== undefined) positionTip(x, y); return; }
+    if (hoverTarget) hoverTarget.marker.scale.set(hoverTarget.ms, hoverTarget.ms * 1.25, 1);
+    hoverTarget = it; const tip = $('#tip');
+    if (it) {
+      it.marker.scale.set(it.ms * 1.25, it.ms * 1.56, 1);
+      tip.textContent = (mode === 'walk' && !isTouch ? 'E · ' : '') + it.label; tip.classList.add('show');
+      if (x !== undefined) positionTip(x, y); else { tip.style.left = ''; tip.style.top = ''; }
+      hoverLabel = it.label;
+    } else { tip.classList.remove('show'); hoverLabel = ''; }
+    canvas.classList.toggle('hovering', !!it);
+    $('#act').classList.toggle('ready', !!it && mode === 'walk');
+    $('#cross').classList.toggle('on', !!it);
+    hudDirty = true;
+  }
+  function positionTip(x, y) { const tip = $('#tip'); tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, x + 16) + 'px'; tip.style.top = (y + 18) + 'px'; }
+  function hoverAt(x, y) { screenRay(x, y); setHover(firstItemHit(), x, y); }
+
+  // keyboard + pointer lock (desktop walk)
+  addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    keys.add(e.code);
+    if (e.code === 'KeyE' && mode === 'walk' && hoverTarget) interact(hoverTarget);
+    if (e.code === 'Escape') closeCard();
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && mode === 'walk') e.preventDefault();
+  });
+  addEventListener('keyup', e => keys.delete(e.code));
+  addEventListener('blur', () => keys.clear());
+  document.addEventListener('mousemove', e => {
+    if (document.pointerLockElement !== canvas || mode !== 'walk') return;
+    player.yaw -= e.movementX * 0.0022; player.pitch = clamp(player.pitch - e.movementY * 0.0022, -1.3, 1.3);
+  });
+  document.addEventListener('mousedown', e => { if (document.pointerLockElement === canvas && mode === 'walk' && hoverTarget) interact(hoverTarget); });
+  document.addEventListener('pointerlockchange', () => { if (mode === 'walk' && !document.pointerLockElement && !isTouch) toast('Sahnaga bosing — sayrni davom ettirish uchun.', 3); });
+
+  // mobile joystick
+  const joy = $('#joy'), knob = joy.querySelector('i'); const joyVec = { x: 0, y: 0 }; let joyId = null;
+  function joyMove(e) { const r = joy.getBoundingClientRect(); let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); const L = Math.hypot(dx, dy), M = 46; if (L > M) { dx *= M / L; dy *= M / L; } knob.style.transform = `translate(${dx}px,${dy}px)`; joyVec.x = dx / M; joyVec.y = dy / M; }
+  joy.addEventListener('pointerdown', e => { e.stopPropagation(); joyId = e.pointerId; joy.setPointerCapture(e.pointerId); joyMove(e); ac(); });
+  joy.addEventListener('pointermove', e => { if (e.pointerId === joyId) joyMove(e); });
+  const joyEnd = e => { if (e.pointerId !== joyId) return; joyId = null; joyVec.x = joyVec.y = 0; knob.style.transform = ''; };
+  joy.addEventListener('pointerup', joyEnd); joy.addEventListener('pointercancel', joyEnd);
+  $('#act').addEventListener('click', () => { if (hoverTarget) interact(hoverTarget); });
+
+  function tryMove(p, dx, dz) {
+    if (!blocked(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return; }
+    if (!blocked(p.x + dx, p.z)) { p.x += dx; return; }
+    if (!blocked(p.x, p.z + dz)) p.z += dz;
+  }
+  function updateWalk(dt) {
+    let f = 0, s = 0;
+    if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1; if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) s += 1; if (keys.has('KeyA') || keys.has('ArrowLeft')) s -= 1;
+    if (keys.has('KeyQ')) player.yaw += dt * 1.8; if (keys.has('KeyR')) player.yaw -= dt * 1.8;
+    f -= joyVec.y; s += joyVec.x;
+    const L = Math.hypot(f, s); if (L > 1) { f /= L; s /= L; }
+    const sp = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 7 : 3.6) * dt;
+    const sy = Math.sin(player.yaw), cy = Math.cos(player.yaw);
+    tryMove(player, (-sy * f + cy * s) * sp, (-cy * f - sy * s) * sp);
+    const bob = L > 0.1 && !reduceMotion ? Math.sin(performance.now() * 0.011) * 0.035 : 0;
+    camera.position.set(player.x, player.eye + bob, player.z);
+    camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+    // center-ray hover
+    raycaster.set(camera.position, camera.getWorldDirection(tmpV2));
+    setHover(firstItemHit(REACH + 6));
+  }
+  function updateOrbit(dt) {
+    if (orbit.auto) orbit.theta += dt * 0.07;
+    else if (!pointers.size && performance.now() - orbit.last > 9000 && !reduceMotion) orbit.auto = true;
+    orbit.target.lerp(orbit.goal, Math.min(1, dt * 2.5)); orbit.dist = lerp(orbit.dist, orbit.distGoal, Math.min(1, dt * 4));
+    const narrow = camera.aspect < 0.8 ? 1.3 : 1, d = orbit.dist * narrow;
+    camera.position.set(orbit.target.x + d * Math.sin(orbit.phi) * Math.sin(orbit.theta), orbit.target.y + d * Math.cos(orbit.phi), orbit.target.z + d * Math.sin(orbit.phi) * Math.cos(orbit.theta));
+    camera.lookAt(orbit.target);
+  }
+
+  // ---------- device orientation (Karton VR / Kamera AR) ----------
+  const ori = { alpha: 0, beta: 90, gamma: 0, has: false };
+  addEventListener('deviceorientation', e => { if (e.alpha == null) return; ori.alpha = e.alpha; ori.beta = e.beta; ori.gamma = e.gamma; ori.has = true; });
+  const zee = new V3(0, 0, 1), yAxis = new V3(0, 1, 0), eul = new THREE.Euler(), q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), qDev = new THREE.Quaternion(), qOff = new THREE.Quaternion();
+  let headingOffset = null;
+  function deviceQuaternion(out) {
+    const D = THREE.MathUtils.DEG2RAD, orient = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+    eul.set(ori.beta * D, ori.alpha * D, -ori.gamma * D, 'YXZ'); out.setFromEuler(eul); out.multiply(q1); out.multiply(q0.setFromAxisAngle(zee, -orient * D));
+    if (headingOffset === null) { const e = new THREE.Euler().setFromQuaternion(out, 'YXZ'); headingOffset = -e.y; }
+    qOff.setFromAxisAngle(yAxis, headingOffset); return out.premultiply(qOff);
+  }
+  async function askOrientation() {
+    try { if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') { const r = await DeviceOrientationEvent.requestPermission(); return r === 'granted'; } } catch (e) { return false; }
+    return true;
+  }
+
+  // ---------- Karton VR (stereo, gaze) ----------
+  const stereo = new THREE.StereoCamera(); stereo.eyeSep = 0.064;
+  let walking = false, dwell = 0, dwellItem = null;
+  const reticle = new THREE.Group(); reticle.position.z = -2; camera.add(reticle); reticle.visible = false;
+  const retRing = new THREE.Mesh(new THREE.RingGeometry(0.028, 0.04, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, fog: false, transparent: true }));
+  const retFill = new THREE.Mesh(new THREE.CircleGeometry(0.04, 32), new THREE.MeshBasicMaterial({ color: 0x7fd18b, depthTest: false, fog: false, transparent: true, opacity: .9 }));
+  retRing.renderOrder = retFill.renderOrder = 1000; retFill.scale.setScalar(0.001); reticle.add(retRing); reticle.add(retFill);
+  function updateWalkFlag() { $('#walkFlag').textContent = walking ? 'Yurish: yoqilgan · to‘xtash uchun bosing' : 'Ekranga bosing — yurish'; }
+  async function startCardboard() {
+    ac(); await askOrientation();
+    try { await document.documentElement.requestFullscreen(); } catch (e) {}
+    try { await screen.orientation.lock('landscape'); } catch (e) {}
+    enterMode('cardboard'); player.x = SPAWN.x; player.z = SPAWN.z; player.pitch = 0;
+    setTimeout(() => { if (!ori.has) toast('Giroskop topilmadi — qarash uchun ekranni suring.'); }, 1500);
+  }
+  function updateCardboard(dt) {
+    if (ori.has) camera.quaternion.copy(deviceQuaternion(qDev));
+    else camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+    camera.getWorldDirection(tmpV2);
+    if (walking) { const fx = tmpV2.x, fz = tmpV2.z, L = Math.hypot(fx, fz) || 1; tryMove(player, fx / L * 2.2 * dt, fz / L * 2.2 * dt); }
+    camera.position.set(player.x, player.eye, player.z);
+    raycaster.set(camera.position, tmpV2);
+    const it = firstItemHit(REACH + 4);
+    if (it && it === dwellItem) { dwell += dt; } else { dwellItem = it; dwell = 0; }
+    retFill.scale.setScalar(it ? Math.max(0.001, clamp(dwell / 1.5, 0, 1)) : 0.001);
+    retRing.material.color.set(it ? 0x7fd18b : 0xffffff);
+    if (it && dwell > 1.5) { interact(it); dwell = -1.5; }
+  }
+  function renderStereo() {
+    const w = innerWidth, h = innerHeight;
+    camera.aspect = (w / 2) / h; camera.fov = 80; camera.updateProjectionMatrix();
+    scene.updateMatrixWorld(); stereo.update(camera);
+    renderer.setScissorTest(true);
+    renderer.setScissor(0, 0, w / 2, h); renderer.setViewport(0, 0, w / 2, h); renderer.render(scene, stereo.cameraL);
+    renderer.setScissor(w / 2, 0, w / 2, h); renderer.setViewport(w / 2, 0, w / 2, h); renderer.render(scene, stereo.cameraR);
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, w, h);
+  }
+  $('#stereoExit').addEventListener('click', e => { e.stopPropagation(); enterMode('walk'); });
+
+  // ---------- Kamera AR (camera feed + gyroscope, works on iPhone) ----------
+  let camStream = null;
+  async function startCamAR() {
+    ac();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Kamera mavjud emas. Sahifani HTTPS orqali oching.'); return; }
+    await askOrientation();
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      const v = $('#camfeed'); v.srcObject = camStream; await v.play().catch(() => {});
+    } catch (e) { toast('Kameraga ruxsat berilmadi: ' + e.message); return; }
+    enterMode('camar'); setEnv('ar'); headingOffset = null;
+    world.scale.setScalar(0.03); world.rotation.set(0, 0, 0); placeCamAR();
+    $('#arHint').textContent = 'Orol oldingizda. Barmoq bilan suring — aylantirish, ikki barmoq — kattalashtirish, belgilarni bosing.';
+  }
+  function placeCamAR() { const s = world.scale.x; world.position.set(0, -1.25 + 4 * s, -1.7 - 30 * s); setShadowFrame(); }
+  function stopCamera() { if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; } $('#camfeed').srcObject = null; }
+  function updateCamAR() {
+    if (ori.has) camera.quaternion.copy(deviceQuaternion(qDev)); else camera.rotation.set(-0.35, 0, 0, 'YXZ');
+    camera.position.set(0, 0, 0);
+  }
+
+  // ---------- WebXR: VR headset and AR ----------
+  let xrKind = null, arPlaced = false, hitSource = null, arBaseY = 0, arScale = 0.02, returnMode = 'walk';
+  const arReticle = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.095, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x7fd18b, fog: false }));
+  arReticle.matrixAutoUpdate = false; arReticle.visible = false; scene.add(arReticle);
+  const teleMarker = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.4, 36).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x9fe7ff, transparent: true, opacity: .85, fog: false, depthWrite: false }));
+  teleMarker.visible = false; scene.add(teleMarker);
+
+  const controllers = [];
+  const laserGeo = new THREE.BufferGeometry().setFromPoints([new V3(0, 0, 0), new V3(0, 0, -1)]);
+  for (let i = 0; i < 2; i++) {
+    const c = renderer.xr.getController(i);
+    const laser = new THREE.Line(laserGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8 }));
+    laser.visible = false; c.add(laser);
+    const grip = renderer.xr.getControllerGrip(i);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.03, 0.12), std(0x30353a, { roughness: .5 })); body.position.z = 0.02; grip.add(body);
+    const rec = { c, grip, laser, src: null, hover: null, ground: null };
+    c.addEventListener('connected', e => { rec.src = e.data; laser.visible = e.data.targetRayMode === 'tracked-pointer'; attachHud(); });
+    c.addEventListener('disconnected', () => { rec.src = null; laser.visible = false; attachHud(); });
+    c.addEventListener('select', () => onXRSelect(rec));
+    dolly.add(c); dolly.add(grip); controllers.push(rec);
+  }
+  function attachHud() {
+    if (hud.parent) hud.parent.remove(hud);
+    if (mode !== 'vr') { hud.visible = false; return; }
+    const left = controllers.find(r => r.src && r.src.handedness === 'left' && r.src.targetRayMode === 'tracked-pointer');
+    if (left) { left.grip.add(hud); hud.position.set(0, 0.07, 0.03); hud.rotation.set(-1.05, 0, 0); }
+    else { camera.add(hud); hud.position.set(0, -0.2, -0.55); hud.rotation.set(-0.35, 0, 0); }
+    hud.visible = true; hudDirty = true;
+  }
+  function controllerRay(rec) {
+    tmpM.identity().extractRotation(rec.c.matrixWorld);
+    raycaster.ray.origin.setFromMatrixPosition(rec.c.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpM);
+  }
+  function onXRSelect(rec) {
+    if (xrKind === 'ar') {
+      if (!arPlaced) { placeAR(); return; }
+      controllerRay(rec); const it = pickAlongRay(); if (it) interact(it); return;
+    }
+    if (xrKind === 'vr') {
+      controllerRay(rec);
+      const it = firstItemHit(40);
+      if (it) { interact(it); return; }
+      const g = raycaster.intersectObject(ground, false)[0];
+      if (g && g.distance < 40) teleportTo(g.point);
+    }
+  }
+  function teleportTo(p) {
+    if (blocked(p.x, p.z)) { nope(); return; }
+    camera.getWorldPosition(tmpV);
+    dolly.position.x += p.x - tmpV.x; dolly.position.z += p.z - tmpV.z;
+    tone(660, 0, 0.12, 'sine', 0.05);
+  }
+  let snapReady = true;
+  function updateVR(dt, frame) {
+    const session = renderer.xr.getSession(); if (!session) return;
+    // thumbsticks
+    let hasLeft = false; for (const s of session.inputSources) if (s.handedness === 'left' && s.gamepad) hasLeft = true;
+    camera.getWorldPosition(tmpV); camera.getWorldDirection(tmpV2); tmpV2.y = 0; tmpV2.normalize();
+    const right = new V3(-tmpV2.z, 0, tmpV2.x);
+    let mx = 0, mz = 0;
+    for (const s of session.inputSources) {
+      const gp = s.gamepad; if (!gp || gp.axes.length < 2) continue;
+      const ax = gp.axes.length >= 4 ? gp.axes[2] : gp.axes[0], ay = gp.axes.length >= 4 ? gp.axes[3] : gp.axes[1];
+      if (s.handedness === 'right') {
+        if (Math.abs(ax) > 0.7 && snapReady) { snapTurn(ax > 0 ? -Math.PI / 6 : Math.PI / 6); snapReady = false; }
+        if (Math.abs(ax) < 0.3) snapReady = true;
+        if (!hasLeft && Math.abs(ay) > 0.15) { mx += tmpV2.x * -ay; mz += tmpV2.z * -ay; }
+      } else {
+        if (Math.abs(ax) > 0.15) { mx += right.x * ax; mz += right.z * ax; }
+        if (Math.abs(ay) > 0.15) { mx += tmpV2.x * -ay; mz += tmpV2.z * -ay; }
+      }
+    }
+    if (mx || mz) {
+      const sp = 2.6 * dt, p = { x: tmpV.x, z: tmpV.z };
+      tryMove(p, mx * sp, mz * sp);
+      dolly.position.x += p.x - tmpV.x; dolly.position.z += p.z - tmpV.z;
+    }
+    // pointer hover
+    let hov = null; teleMarker.visible = false;
+    for (const rec of controllers) {
+      if (!rec.src) continue;
+      controllerRay(rec);
+      const it = firstItemHit(40);
+      let len = 6;
+      if (it) { hov = it; len = raycaster.ray.origin.distanceTo(it.hit.position); rec.laser.material.color.set(0x7fd18b); }
+      else {
+        rec.laser.material.color.set(0xffffff);
+        const g = raycaster.intersectObject(ground, false)[0];
+        if (g && g.distance < 40 && rec.src.targetRayMode === 'tracked-pointer') { len = g.distance; teleMarker.position.copy(g.point); teleMarker.position.y += 0.03; teleMarker.visible = true; teleMarker.material.color.set(blocked(g.point.x, g.point.z) ? 0xe9836f : 0x9fe7ff); }
+      }
+      rec.laser.scale.z = len;
+    }
+    const gaze = controllers.some(r => r.src && r.src.targetRayMode === 'gaze');
+    reticle.visible = gaze; retFill.scale.setScalar(hov && gaze ? 1 : 0.001);
+    if (hov !== hoverTarget) setHover(hov);
+  }
+  function snapTurn(a) {
+    camera.getWorldPosition(tmpV);
+    const local = camera.position.clone();
+    dolly.rotation.y += a;
+    const rotated = local.clone().applyAxisAngle(yAxis, dolly.rotation.y);
+    dolly.position.x = tmpV.x - rotated.x; dolly.position.z = tmpV.z - rotated.z;
+  }
+
+  async function startVR() {
+    if (!xrSupport.vr) { openCard('novr'); return; }
+    ac();
+    try {
+      renderer.xr.setReferenceSpaceType('local-floor');
+      const s = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] });
+      xrKind = 'vr'; returnMode = mode === 'orbit' ? 'orbit' : 'walk';
+      s.addEventListener('end', onXREnd);
+      await renderer.xr.setSession(s);
+      enterMode('vr');
+      dolly.position.set(SPAWN.x, 0, SPAWN.z); dolly.rotation.set(0, 0, 0);
+      camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
+      attachHud(); toast('VR: chap tutqich — yurish, o‘ng — burilish, trigger — bajarish yoki teleport.');
+    } catch (e) { toast('VR sessiyasini boshlab bo‘lmadi: ' + e.message); xrKind = null; }
+  }
+  async function startAR() {
+    if (!xrSupport.ar) { if (isTouch) { startCamAR(); return; } openCard('noar'); return; }
+    ac();
+    const opts = { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay', 'local-floor'], domOverlay: { root: $('#ui') } };
+    let s = null;
+    try { s = await navigator.xr.requestSession('immersive-ar', opts); }
+    catch (e) { try { s = await navigator.xr.requestSession('immersive-ar', { optionalFeatures: ['dom-overlay'], domOverlay: { root: $('#ui') } }); } catch (e2) { toast('AR boshlanmadi: ' + e2.message + '. “Kamera AR” sinab ko‘ring.'); return; } }
+    try {
+      xrKind = 'ar'; returnMode = mode === 'walk' ? 'walk' : 'orbit';
+      renderer.xr.setReferenceSpaceType('local');
+      s.addEventListener('end', onXREnd);
+      await renderer.xr.setSession(s);
+      enterMode('ar'); setEnv('ar');
+      arPlaced = false; world.visible = false; arScale = 0.02;
+      dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0); camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
+      $('#arHint').textContent = 'Telefonni stol yoki pol ustida sekin aylantiring, keyin halqa paydo bo‘lgan joyga bosing.';
+      hitSource = null;
+      s.requestReferenceSpace('viewer').then(vs => s.requestHitTestSource ? s.requestHitTestSource({ space: vs }) : null).then(src => { hitSource = src; }).catch(() => { hitSource = null; });
+    } catch (e) { toast('AR boshlanmadi: ' + e.message); xrKind = null; }
+  }
+  function placeAR() {
+    camera.getWorldPosition(tmpV);
+    let p;
+    if (arReticle.visible) { p = new V3().setFromMatrixPosition(arReticle.matrix); }
+    else { camera.getWorldDirection(tmpV2); tmpV2.y = 0; tmpV2.normalize(); p = tmpV.clone().addScaledVector(tmpV2, 1.0); p.y = tmpV.y - 0.7; }
+    arBaseY = p.y; world.position.set(p.x, arBaseY + 4 * arScale, p.z);
+    world.rotation.set(0, Math.atan2(tmpV.x - p.x, tmpV.z - p.z), 0); world.scale.setScalar(arScale);
+    world.visible = true; arPlaced = true; arReticle.visible = false; setShadowFrame();
+    $('#arHint').textContent = 'Orol joylashdi! Belgilarga bosib vazifalarni bajaring. Atrofida yurib ko‘ring.';
+  }
+  function scaleAR(f) {
+    if (mode === 'camar') { world.scale.setScalar(clamp(world.scale.x * f, 0.008, 0.09)); placeCamAR(); return; }
+    arScale = clamp(arScale * f, 0.006, 0.08);
+    if (arPlaced) { world.scale.setScalar(arScale); world.position.y = arBaseY + 4 * arScale; setShadowFrame(); }
+  }
+  function onXREnd() {
+    const was = xrKind; xrKind = null; hitSource = null; arReticle.visible = false; teleMarker.visible = false; reticle.visible = false;
+    if (hud.parent) hud.parent.remove(hud); hud.visible = false;
+    dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0);
+    renderer.xr.setReferenceSpaceType('local-floor');
+    if (was === 'vr') { camera.getWorldPosition(tmpV); }
+    enterMode(returnMode);
+  }
+  function updateAR(frame) {
+    if (arPlaced || !frame || !hitSource) { if (!arPlaced && !hitSource) arReticle.visible = false; return; }
+    const ref = renderer.xr.getReferenceSpace(), res = frame.getHitTestResults(hitSource);
+    if (res.length) { const pose = res[0].getPose(ref); if (pose) { arReticle.visible = true; arReticle.matrix.fromArray(pose.transform.matrix); } }
+    else arReticle.visible = false;
+  }
+  // stop XR select when tapping the DOM overlay buttons
+  document.querySelectorAll('#ui button, #ui .glass').forEach(el => el.addEventListener('beforexrselect', e => e.preventDefault()));
+  $('#arBigger').addEventListener('click', () => scaleAR(1.25));
+  $('#arSmaller').addEventListener('click', () => scaleAR(0.8));
+  $('#arReplace').addEventListener('click', () => {
+    if (mode === 'camar') { world.rotation.set(0, 0, 0); world.scale.setScalar(0.03); headingOffset = null; placeCamAR(); return; }
+    arPlaced = false; world.visible = false; $('#arHint').textContent = 'Yangi joyni tanlang: halqa paydo bo‘lgach bosing.';
+  });
+  $('#arExit').addEventListener('click', () => {
+    if (mode === 'camar') { enterMode('orbit'); return; }
+    const s = renderer.xr.getSession(); if (s) s.end();
+  });
+
+  // ---------- dock / intro wiring ----------
+  function startMode(m) {
+    if (m === 'vr') return startVR();
+    if (m === 'ar') return startAR();
+    if (m === 'cardboard') return startCardboard();
+    if (m === 'camar') return startCamAR();
+    if (m === 'walk') { enterMode('walk'); if (player.x === SPAWN.x && player.z === SPAWN.z) toast(isTouch ? 'Joystik bilan yuring, ekranni surib qarang. Belgini bosing yoki “Bajarish”.' : 'Sahnaga bosing, so‘ng WASD — yurish, sichqoncha — qarash, E — bajarish.', 6); return; }
+    enterMode('orbit'); toast('Orolni aylantiring va belgilarni bosing. Batafsil ishtirok uchun “Sayr” rejimini tanlang.', 5);
+  }
+  document.querySelectorAll('.dock [data-mode]').forEach(b => b.addEventListener('click', () => startMode(b.dataset.mode)));
+  document.querySelectorAll('[data-start]').forEach(b => b.addEventListener('click', () => startMode(b.dataset.start)));
+  $('#soundBtn').addEventListener('click', () => { soundOn = !soundOn; $('#soundBtn').setAttribute('aria-pressed', String(soundOn)); $('#soundBtn').textContent = soundOn ? 'Ovoz' : 'Ovoz o‘chiq'; if (soundOn) chime(); });
+  $('#helpBtn').addEventListener('click', () => openCard('help'));
+
+  function configureStarts() {
+    const show = (k, v) => { const b = document.querySelector(`[data-start="${k}"]`); if (b) b.hidden = !v; const d = document.querySelector(`.dock [data-mode="${k}"]`); if (d) d.hidden = !v; };
+    show('vr', xrSupport.vr || !isMobileUA);
+    show('ar', xrSupport.ar || !isMobileUA);
+    show('cardboard', isMobileUA);
+    show('camar', isMobileUA && !xrSupport.ar);
+    document.querySelectorAll('.start').forEach(b => b.classList.remove('primary'));
+    let primary = 'walk';
+    if (wantMode === 'vr') primary = xrSupport.vr ? 'vr' : (isMobileUA ? 'cardboard' : 'vr');
+    else if (wantMode === 'ar') primary = xrSupport.ar ? 'ar' : (isMobileUA ? 'camar' : 'ar');
+    else if (xrSupport.vr && !isMobileUA) primary = 'vr';
+    const pb = document.querySelector(`[data-start="${primary}"]`); if (pb) { pb.hidden = false; pb.classList.add('primary'); pb.parentNode.prepend(pb); }
+  }
+  async function detectXR() {
+    if (navigator.xr && navigator.xr.isSessionSupported) {
+      try { xrSupport.vr = await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) {}
+      try { xrSupport.ar = await navigator.xr.isSessionSupported('immersive-ar'); } catch (e) {}
+    }
+    configureStarts();
+  }
+
+  // =====================================================================
+  // 16. Resize and main loop
+  // =====================================================================
+  function resize() {
+    if (renderer.xr.isPresenting) return;
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.fov = mode === 'orbit' ? (w < h ? 58 : 42) : mode === 'camar' ? 60 : (w < h ? 75 : 66);
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize);
+
+  const clock = new THREE.Clock();
+  function loop(time, frame) {
+    const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+    eco += (ecoTarget - eco) * Math.min(1, dt * 1.4);
+    if (Math.abs(ecoTarget - eco) < 0.0005) eco = ecoTarget;
+    applyEco(eco); updateMeter(eco);
+    stepTweens(dt);
+
+    // water
+    oceanN.offset.x += dt * 0.004; oceanN.offset.y += dt * 0.003;
+    pondN.offset.x += dt * 0.01; riverN.offset.y -= dt * 0.08;
+    pondClean01 += (pondTarget - pondClean01) * Math.min(1, dt * 0.8);
+    pondMat.color.copy(pondDirty).lerp(pondClean, pondClean01); pondMat.roughness = lerp(0.4, 0.05, pondClean01); pondMat.metalness = lerp(0.05, 0.25, pondClean01);
+    scumMat.opacity = 0.85 * (1 - pondClean01); scum.visible = scumMat.opacity > 0.02;
+    outflow.forEach((s, i) => {
+      const u = s.userData; u.t = (u.t + dt * 0.5) % 1;
+      s.position.set(-12 + Math.sin(i) * 0.1, 0.5 - u.t * 0.4, 5.6 + u.t * 1.6); s.scale.setScalar(0.5 + u.t * 1.2);
+      s.material.color.setRGB(lerp(0.36, 0.75, pondClean01), lerp(0.30, 0.88, pondClean01), lerp(0.13, 1, pondClean01));
+      s.material.opacity = (1 - u.t) * lerp(0.8, 0.45, pondClean01);
+    });
+
+    // chimneys: smoke + labels + towers
+    chimneys.forEach(ch => {
+      ch.f += (ch.fTarget - ch.f) * Math.min(1, dt * 0.7); const f = smooth(clamp(ch.f, 0, 1));
+      ch.smoke.forEach(s => {
+        const u = s.userData; u.t = (u.t + dt * lerp(0.075, 0.12, f)) % 1; const k = u.t;
+        const drift = lerp(22, 7, f) * k, rise = lerp(13, 9, f) * k;
+        s.position.set(ch.top.x + WIND.x * drift + Math.sin(t * 0.7 + u.wob + k * 5) * 0.6 * k, ch.top.y + rise, ch.top.z + WIND.z * drift + Math.cos(t * 0.6 + u.wob) * 0.4 * k);
+        const sc = lerp(1.4 + k * 9, 1.0 + k * 5.5, f); s.scale.set(sc, sc, 1);
+        s.material.color.copy(u.base).lerp(steam, f);
+        s.material.opacity = Math.min(1, k * 12) * Math.pow(1 - k, 1.2) * lerp(0.92, 0.4, f);
+        s.material.rotation = u.wob + k * 1.5;
+      });
+      ch.labels.forEach(l => {
+        const u = l.userData; u.t = (u.t + dt * 0.06) % 1;
+        l.position.set(ch.top.x + WIND.x * u.t * 16, ch.top.y + 2 + u.t * 10, ch.top.z + WIND.z * u.t * 16);
+        l.material.opacity = Math.sin(u.t * Math.PI) * (1 - f); l.visible = l.material.opacity > 0.02;
+      });
+      const st = ch.steamLabel; st.userData.t = (st.userData.t + dt * 0.08) % 1;
+      st.position.set(ch.top.x + st.userData.t * 3, ch.top.y + 2 + st.userData.t * 6, ch.top.z);
+      st.material.opacity = Math.sin(st.userData.t * Math.PI) * f * 0.95; st.visible = st.material.opacity > 0.02;
+      const T = ch.tower;
+      if (T.g.visible) {
+        for (let i = 0; i < T.N; i++) {
+          T.ph[i] = (T.ph[i] + dt * 0.11) % 1; const a = T.ang[i] + t * 0.8, y = 0.7 + T.ph[i] * (T.H - 1.4);
+          T.pos[i * 3] = Math.cos(a) * T.rad[i]; T.pos[i * 3 + 1] = y; T.pos[i * 3 + 2] = Math.sin(a) * T.rad[i];
+          const c = [0, 0, 0]; gradColor(T.ph[i], c); T.col[i * 3] = c[0]; T.col[i * 3 + 1] = c[1]; T.col[i * 3 + 2] = c[2];
+        }
+        T.pts.geometry.attributes.position.needsUpdate = true; T.pts.geometry.attributes.color.needsUpdate = true;
+      }
+    });
+
+    // markers bob
+    items.forEach(it => { if (!it.done) it.marker.position.y = it.baseY + Math.sin(t * 2 + it.ph) * 0.22; });
+    if (beacon.visible) { beaconT -= dt; beaconMat.opacity = clamp(beaconT, 0, 1) * (0.28 + Math.sin(t * 5) * 0.08); if (beaconT <= 0) beacon.visible = false; }
+
+    turbines.forEach((h, i) => { h.rotation.z += dt * (0.9 + i * 0.15); });
+    if (birds.visible) birds.children.forEach((b, i) => {
+      const u = b.userData, a = t * 0.25 + u.ph;
+      b.position.set(Math.cos(a) * u.r - 4, u.h + Math.sin(t + i) * 0.5, Math.sin(a) * u.r + 2); b.rotation.y = -a;
+      const fl = Math.sin(t * 9 + i) * 0.6; u.wl.rotation.z = fl; u.wr.rotation.z = -fl;
+    });
+    if (butterflies.visible) butterflies.children.forEach((b, i) => {
+      const u = b.userData, a = t * 0.6 + u.ph;
+      b.position.set(u.cx + Math.sin(a) * 2.5, 0.9 + Math.sin(t * 3 + i) * 0.35, u.cz + Math.cos(a * 1.3) * 2.5); b.rotation.y = -a;
+      const fl = Math.sin(t * 18 + i) * 0.9; u.p1.rotation.y = fl; u.p2.rotation.y = -fl;
+    });
+    if (eco > 0.7 && envMode === 'full' && soundOn && mode !== 'intro') { nextChirp -= dt; if (nextChirp <= 0) { chirp(); nextChirp = 2 + Math.random() * 5; } }
+
+    // mode-specific camera / input
+    if (mode === 'vr') updateVR(dt, frame);
+    else if (mode === 'ar') updateAR(frame);
+    else if (mode === 'walk') updateWalk(dt);
+    else if (mode === 'cardboard') updateCardboard(dt);
+    else if (mode === 'camar') updateCamAR();
+    else updateOrbit(dt);
+    reticle.visible = mode === 'cardboard' || (mode === 'vr' && reticle.visible);
+
+    if (hudDirty && hud.visible) drawHud();
+
+    if (mode === 'cardboard' && !renderer.xr.isPresenting) renderStereo();
+    else renderer.render(scene, camera);
+  }
+
+  // =====================================================================
+  // 17. Boot
+  // =====================================================================
+  loadSky();
+  setShadowFrame(); renderTasks(); applyEco(0); updateMeter(0); resize();
+  updateOrbit(0);
+  detectXR();
+  if (wantMode === 'walk' || wantMode === 'orbit') setTimeout(() => startMode(wantMode), 50);
+  renderer.setAnimationLoop(loop);
+})();
+</script>
+</body>
+</html>
