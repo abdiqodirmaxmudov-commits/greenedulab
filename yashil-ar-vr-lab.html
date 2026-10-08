@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yashil ta'lim: ekologik vaziyatlar AR/VR laboratoriyasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #f3f6f1;
+    --panel: rgba(18, 30, 24, 0.72);
+    --panel-solid: #16261e;
+    --leaf: #86d98f;
+    --moss: #2f7d4f;
+    --warn: #f0a36b;
+    --line: rgba(255,255,255,0.14);
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    height: 100%; margin: 0; overflow: hidden; background: #1a211e; color: var(--ink);
+    font-family: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #cam { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; z-index: 0; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; z-index: 1; cursor: grab; }
+  #ui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #ui > * { pointer-events: auto; }
+
+  #ui > header {
+    pointer-events: none;
+    position: absolute; left: 16px; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 12px);
+    display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+  }
+  header > * { pointer-events: auto; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
+  h1 {
+    margin: 0; font-family: "Unbounded", "Arial Black", system-ui, sans-serif; font-weight: 700;
+    font-size: clamp(19px, 4.6vw, 30px); line-height: 1.1; text-shadow: 0 2px 12px rgba(0,0,0,.45);
+    pointer-events: none;
+  }
+  h1 small { display: block; font-family: "Manrope", system-ui, sans-serif; font-weight: 600; font-size: 13px; opacity: .85; margin-top: 4px; }
+  .modes { display: flex; gap: 6px; flex-shrink: 0; pointer-events: auto; }
+  .modes button, .tabs button, .sol, .ticks button {
+    font: inherit; color: var(--ink); border: 1px solid var(--line); background: var(--panel);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); cursor: pointer;
+  }
+  .modes button { border-radius: 12px; padding: 8px 11px; font-weight: 700; font-size: 13px; }
+  .modes button[aria-pressed="true"] { background: var(--moss); border-color: var(--leaf); }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: #14231b; border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
+
+  .panel {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    width: min(560px, calc(100% - 20px)); max-height: 46vh; overflow-y: auto;
+    background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-radius: 20px; padding: 14px 16px 14px; box-shadow: 0 14px 40px rgba(0,0,0,.35);
+  }
+  .panel.min .body { display: none; }
+  .phead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .phead h2 { margin: 0; font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 16px; }
+  #stageName { font-weight: 700; color: var(--warn); font-size: 14px; text-align: right; }
+  .collapse { background: none; border: 0; color: var(--ink); font: inherit; font-size: 13px; opacity: .8; cursor: pointer; padding: 2px 4px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 36px; margin: 4px 0 0; background: transparent; }
+  input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 8px; background: var(--track, linear-gradient(90deg, #5fb36a, #d7a95c, #b65a3e)); }
+  input[type=range]::-moz-range-track { height: 8px; border-radius: 8px; background: var(--track, linear-gradient(90deg, #5fb36a, #d7a95c, #b65a3e)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: #fff; border: 4px solid var(--moss); box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 4px solid var(--moss); }
+  input[type=range]:focus-visible { outline: 2px solid var(--leaf); outline-offset: 3px; border-radius: 10px; }
+  .ticks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 2px; }
+  .ticks button { border-radius: 10px; padding: 6px 4px; font-size: 12px; line-height: 1.25; background: transparent; }
+  .ticks button.on { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.35); }
+  .fact { margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+  .row2 { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .sol { border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; }
+  .sol[aria-pressed="true"] { background: var(--moss); border-color: var(--leaf); }
+  .soltext { display: none; margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid var(--leaf); background: rgba(134,217,143,.1); border-radius: 0 10px 10px 0; font-size: 14px; line-height: 1.5; }
+  .soltext.show { display: block; }
+  details { margin-top: 10px; font-size: 14px; line-height: 1.5; }
+  summary { cursor: pointer; font-weight: 700; }
+  details p { margin: 6px 0 0; }
+
+  #toast {
+    position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
+    width: min(420px, calc(100% - 40px)); background: var(--panel-solid); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px 18px; font-size: 14px; line-height: 1.5; display: none;
+    box-shadow: 0 16px 50px rgba(0,0,0,.5);
+  }
+  #toast.show { display: block; }
+  #toast button { margin-top: 10px; font: inherit; font-weight: 700; color: #14231b; background: var(--ink); border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+  #arHint { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); background: var(--panel); border-radius: 14px; padding: 8px 14px; font-size: 14px; display: none; text-align: center; }
+  #err { display: none; position: fixed; inset: 0; place-items: center; text-align: center; padding: 24px; z-index: 5; }
+
+  @media (max-width: 560px) {
+    .modes button { padding: 7px 9px; font-size: 12px; }
+    .fact { font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted></video>
+<canvas id="scene" aria-label="Tanlangan ekologik vaziyatning 3D modeli"></canvas>
+
+<div id="ui">
+  <header>
+    <div class="top">
+      <h1>Ekologik vaziyatlar<small>Yashil ta'lim uchun 3D, AR va VR laboratoriya</small></h1>
+      <div class="modes" role="group" aria-label="Ko'rish rejimi">
+        <button id="btnAR" aria-pressed="false" title="Obyektni haqiqiy muhitga joylashtirish (WebXR)">AR</button>
+        <button id="btnCam" aria-pressed="false" title="Kamera tasviri ustida 3D model">Kamera</button>
+        <button id="btnVR" aria-pressed="false" title="VR ko'zoynakda immersiv rejim">VR</button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Ekologik vaziyatlar" id="tabs"></nav>
+  </header>
+
+  <div id="arHint">Telefonni sekin harakatlantiring va yashil halqa chiqqach, ekranga bosib modelni joylashtiring</div>
+
+  <section class="panel" id="panel" aria-live="polite">
+    <div class="phead">
+      <h2 id="sceneTitle"></h2>
+      <span id="stageName"></span>
+      <button class="collapse" id="collapse" aria-expanded="true">Yig'ish</button>
+    </div>
+    <div class="body">
+      <input id="slider" type="range" min="0" max="1000" value="0" aria-label="Vaziyat bosqichi">
+      <div class="ticks" id="ticks"></div>
+      <p class="fact" id="fact"></p>
+      <div class="row2">
+        <button class="sol" id="sol" aria-pressed="false">Yechimni ko'rsatish</button>
+      </div>
+      <p class="soltext" id="soltext"></p>
+      <details id="qbox"><summary>Muhokama uchun savol</summary><p id="question"></p></details>
+    </div>
+  </section>
+
+  <div id="toast" role="dialog" aria-modal="false"><div id="toastText"></div><button id="toastOk">Tushunarli</button></div>
+</div>
+
+<div id="err"><p>3D sahna yuklanmadi. Internet aloqasini tekshirib, sahifani yangilang.</p></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+'use strict';
+if (!window.THREE) { document.getElementById('err').style.display = 'grid'; return; }
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------- renderer / scene ----------------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.xr.enabled = true;
+
+const scene = new THREE.Scene();
+const skyColor = new THREE.Color('#9fd3f0');
+scene.background = skyColor.clone();
+scene.fog = new THREE.Fog(skyColor.clone(), 60, 140);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x4a3b2c, 0.6); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1d6, 1.0);
+sun.position.set(14, 22, 10); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 70 });
+scene.add(sun); scene.add(sun.target);
+
+const root = new THREE.Group(); scene.add(root);   // everything scenario-related lives here
+let content = null, updateFn = null;
+
+// ---------------- helpers ----------------
+const cl = x => Math.min(1, Math.max(0, x));
+const sm = x => { x = cl(x); return x * x * (3 - 2 * x); };
+const lerpC = (a, b, t, out) => out.copy(a).lerp(b, t);
+const C = c => new THREE.Color(c);
+function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.9, flatShading: true }, o || {}));
+function mesh(g, m, x, y, z, p) { const o = new THREE.Mesh(g, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; if (p) p.add(o); return o; }
+function shadowAll(g) { g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); return g; }
+const S0 = 0.0001;
+function setS(o, s) { o.scale.setScalar(Math.max(S0, s)); o.visible = s > 0.002; }
+
+function base(p, topColor, R) {
+  R = R || 10;
+  const top = M(topColor);
+  const disc = mesh(new THREE.CircleGeometry(R, 48), top, 0, 0.002, 0, p); disc.rotation.x = -Math.PI / 2;
+  mesh(new THREE.CylinderGeometry(R, R * 0.93, 1.4, 48), M('#6b4f37'), 0, -0.7, 0, p);
+  const c = mesh(new THREE.ConeGeometry(R * 0.93, 5, 12), M('#57483d'), 0, -3.9, 0, p); c.rotation.x = Math.PI;
+  return top;
+}
+function inDisc(r, rMax) { return r < rMax; }
+
+// round sprite for particles
+const dotTex = (function () {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+})();
+function particles(n, color, size, p) {
+  const pos = new Float32Array(n * 3);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color, size, map: dotTex, transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true });
+  const pts = new THREE.Points(geo, mat); p.add(pts);
+  return { pts, pos, mat, geo, n, seed: Array.from({ length: n }, () => Math.random()) };
+}
+
+// ---- object builders ----
+function roundTree(s, leafMat) {
+  const g = new THREE.Group();
+  mesh(new THREE.CylinderGeometry(0.12, 0.18, 1, 6), M('#6b4a2f'), 0, 0.5, 0, g);
+  const lm = leafMat || M('#4f9e4f');
+  [[0, 1.7, 0, .85], [.45, 1.45, .2, .6], [-.4, 1.5, -.15, .6]].forEach(([a, b, c, r]) => mesh(new THREE.IcosahedronGeometry(r, 1), lm, a, b, c, g));
+  g.scale.setScalar(s || 1); return g;
+}
+function pineTree(s, leafMat) {
+  const g = new THREE.Group();
+  mesh(new THREE.CylinderGeometry(0.1, 0.16, 1, 6), M('#6b4a2f'), 0, 0.5, 0, g);
+  const lm = leafMat || M('#2f7d4f');
+  [[1.0, 1.3, 1.3], [0.78, 1.1, 2.0], [0.5, 0.9, 2.6]].forEach(([r, h, y]) => mesh(new THREE.ConeGeometry(r, h, 7), lm, 0, y, 0, g));
+  g.scale.setScalar(s || 1); return g;
+}
+function stump() {
+  const g = new THREE.Group();
+  mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.35, 7), M('#7a5638'), 0, 0.17, 0, g);
+  mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.02, 7), M('#d9b88a'), 0, 0.36, 0, g);
+  return g;
+}
+function saxaul(s) {
+  const g = new THREE.Group(); const wood = M('#7d6a55'), leaf = M('#8fa86b');
+  for (let i = 0; i < 4; i++) {
+    const b = mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.9, 5), wood, 0, 0.35, 0, g);
+    b.rotation.z = (i % 2 ? 1 : -1) * (0.3 + i * 0.1); b.rotation.y = i * 1.6;
+  }
+  [[0, .85, 0, .38], [.3, .7, .1, .3], [-.3, .72, -.1, .3]].forEach(([a, b, c, r]) => mesh(new THREE.IcosahedronGeometry(r, 0), leaf, a, b, c, g));
+  g.scale.setScalar(s || 1); return g;
+}
+function house(col) {
+  const g = new THREE.Group();
+  mesh(new THREE.BoxGeometry(0.9, 0.8, 0.9), M(col || '#e9dcc0'), 0, 0.4, 0, g);
+  const r = mesh(new THREE.ConeGeometry(0.75, 0.55, 4), M('#a8503c'), 0, 1.07, 0, g); r.rotation.y = Math.PI / 4;
+  return g;
+}
+function turbine(s) {
+  const g = new THREE.Group(); const w = M('#f3f5f6', { roughness: 0.5 });
+  mesh(new THREE.CylinderGeometry(0.07, 0.14, 5, 10), w, 0, 2.5, 0, g);
+  const hub = new THREE.Group(); hub.position.set(0, 5, 0.18); g.add(hub);
+  hub.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), w));
+  for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2, 0.04), w); b.geometry.translate(0, 1, 0); b.rotation.z = k * Math.PI * 2 / 3; b.castShadow = true; hub.add(b); }
+  g.scale.setScalar(s || 1); g.userData.hub = hub; return shadowAll(g);
+}
+function solarPanel() {
+  const g = new THREE.Group();
+  const p = mesh(new THREE.BoxGeometry(1.2, 0.06, 0.8), M('#1f3d7a', { roughness: 0.3, metalness: 0.4, flatShading: false }), 0, 0.6, 0, g); p.rotation.x = -0.5;
+  mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 6), M('#9aa0a4'), 0, 0.3, 0, g);
+  return g;
+}
+function boat(hullMat) {
+  const g = new THREE.Group();
+  const hull = mesh(new THREE.BoxGeometry(2.0, 0.45, 0.7), hullMat, 0, 0.22, 0, g);
+  const bow = mesh(new THREE.CylinderGeometry(0.01, 0.35, 0.7, 3), hullMat, 1.2, 0.25, 0, g); bow.rotation.z = -Math.PI / 2; bow.scale.set(1, 1, 0.7);
+  mesh(new THREE.BoxGeometry(0.6, 0.45, 0.5), M('#dcd6c8'), -0.3, 0.67, 0, g);
+  mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5), M('#5a4a3a'), 0.4, 0.95, 0, g);
+  return g;
+}
+function deer() {
+  const g = new THREE.Group(); const m = M('#9a6a3e');
+  mesh(new THREE.BoxGeometry(0.8, 0.35, 0.3), m, 0, 0.7, 0, g);
+  mesh(new THREE.BoxGeometry(0.2, 0.45, 0.2), m, 0.45, 1.0, 0, g);
+  [[-.3, .12], [-.3, -.12], [.3, .12], [.3, -.12]].forEach(([x, z]) => mesh(new THREE.BoxGeometry(0.07, 0.55, 0.07), m, x, 0.28, z, g));
+  return g;
+}
+function sheep() {
+  const g = new THREE.Group();
+  mesh(new THREE.IcosahedronGeometry(0.3, 0), M('#f1eee6'), 0, 0.42, 0, g).scale.set(1.3, 0.9, 1);
+  mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), M('#3a3230'), 0.4, 0.5, 0, g);
+  return g;
+}
+function crackLines(p, rand, n, xMin, xMax, R, color) {
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0 });
+  for (let i = 0; i < n; i++) {
+    let x = xMin + rand() * (xMax - xMin), z = (rand() - .5) * 2 * R;
+    if (x * x + z * z > R * R * 0.85) continue;
+    const pts = [new THREE.Vector3(x, 0.02, z)];
+    for (let k = 0; k < 4; k++) { x += (rand() - .5) * 1.6; z += (rand() - .5) * 1.6; pts.push(new THREE.Vector3(x, 0.02, z)); }
+    p.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+  }
+  return mat;
+}
+
+// ---------------- scenarios ----------------
+const SCENES = [
+{
+  key: 'iqlim', name: 'Iqlim o\u2018zgarishi',
+  track: 'linear-gradient(90deg,#5fb36a,#e7c15c,#e0823f,#b93b2e)',
+  stages: [
+    ['1900-yillar', 'Sanoat inqilobigacha iqlim nisbatan barqaror edi. Tog\u2018 muzliklari daryolarni yil bo\u2018yi suv bilan ta\u2019minlab turgan.'],
+    ['Bugun: +1,1 \u00B0C', 'Issiqxona gazlari tufayli Yerning o\u2018rtacha harorati sanoatlashuvgacha bo\u2018lgan davrga nisbatan taxminan 1,1 \u00B0C ga oshdi (IPCC, 2021). Dengiz sathi 1901-yildan beri taxminan 20 sm ko\u2018tarildi.'],
+    ['+2 \u00B0C ssenariysi', 'Isish 2 \u00B0C ga yetsa, muzliklar tezroq eriydi, issiq to\u2018lqinlar va qurg\u2018oqchilik ko\u2018payadi. Amudaryo va Sirdaryo Pomir hamda Tyan-Shan muzliklaridan suv oladi.'],
+    ['+4 \u00B0C ssenariysi', 'Eng salbiy ssenariyda pastqam qirg\u2018oqlardagi aholi punktlarini suv bosishi, ko\u2018plab tur yo\u2018qolib ketishi mumkin. Modeldagi masshtab shartli.']
+  ],
+  question: 'Tog\u2018 muzliklari erib tugasa, O\u2018zbekistondagi daryolar va dehqonchilikka qanday ta\u2019sir qiladi? Sabab-oqibat zanjirini tuzing.',
+  solution: 'Quyosh va shamol energiyasi, energiyani tejash, jamoat transporti va daraxt ekish issiqxona gazlari chiqindisini kamaytiradi. Isishni to\u2018xtatish mumkin emas, lekin uni sekinlashtirish mumkin.',
+  build(p) {
+    const rand = rng(11);
+    mesh(new THREE.CylinderGeometry(14, 13.5, 2.6, 48), M('#7a6a52'), 0, -2.3, 0, p);
+    const oceanMat = M('#2f86c9', { transparent: true, opacity: 0.8, roughness: 0.2, flatShading: false });
+    const ocean = mesh(new THREE.CylinderGeometry(14.05, 14.05, 1, 48), oceanMat, 0, -0.95, 0, p); ocean.castShadow = false;
+    const topMat = M('#6fb35f');
+    const top = mesh(new THREE.CircleGeometry(7, 40), topMat, 0, 0.002, 0, p); top.rotation.x = -Math.PI / 2;
+    mesh(new THREE.CylinderGeometry(7, 7.6, 2, 40), M('#cdb57e'), 0, -1, 0, p);
+    mesh(new THREE.ConeGeometry(4.2, 6, 9), M('#7b6a5a'), -1.5, 3, -1.5, p);
+    const glacier = mesh(new THREE.ConeGeometry(2.3, 2.8, 9), M('#f4f8fb', { roughness: 0.4 }), -1.5, 4.6, -1.5, p);
+    for (let i = 0; i < 6; i++) { const a = 0.1 + i * 0.36, h = house(); h.position.set(Math.cos(a) * 5.7, 0, Math.sin(a) * 5.7); h.rotation.y = -a; p.add(shadowAll(h)); }
+    const leaf = M('#4f9e4f'); const leafA = C('#4f9e4f'), leafB = C('#a08a45');
+    for (let i = 0; i < 9; i++) { const a = 2.6 + rand() * 2.6, r = 2.5 + rand() * 3.5; const t = roundTree(0.8 + rand() * .4, leaf); t.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); p.add(shadowAll(t)); }
+    const solG = new THREE.Group(); p.add(solG);
+    const turbs = [[3.8, -2.5], [2, -4.5]].map(([x, z]) => { const t = turbine(0.9); t.position.set(x, 0, z); t.rotation.y = -0.6; solG.add(t); return t; });
+    [[1.5, 2.5], [2.9, 2.2], [1.2, 3.8]].forEach(([x, z]) => { const s = solarPanel(); s.position.set(x, 0, z); solG.add(shadowAll(s)); });
+    const skyA = C('#9fd3f0'), skyB = C('#f1b27f'), sunA = C('#fff1d6'), sunB = C('#ffb070'), ga = C('#6fb35f'), gb = C('#b3a35c');
+    return (d, r, t, dt) => {
+      const e = sm(d);
+      ocean.position.y = -0.45 + e * 1.0 - 0.5;
+      const s = 1 - 0.9 * e; glacier.scale.setScalar(Math.max(0.05, s)); glacier.position.y = 6 - 1.4 * Math.max(0.05, s);
+      lerpC(leafA, leafB, cl((e - 0.3) * 1.4), leaf.color);
+      lerpC(ga, gb, cl((e - 0.3) * 1.4), topMat.color);
+      setS(solG, sm(r));
+      turbs.forEach(tb => tb.userData.hub.rotation.z += dt * 1.5);
+      lerpC(skyA, skyB, e, env.sky); lerpC(sunA, sunB, e, sun.color); env.sunI = 0.9 + 0.4 * e;
+    };
+  }
+},
+{
+  key: 'chollanish', name: 'Cho\u2018llanish',
+  track: 'linear-gradient(90deg,#5fb36a,#9fb45a,#d7b46a,#e3c98e)',
+  stages: [
+    ['Yashil yaylov', 'Yaylovdagi o\u2018t va butalar tuproqni ildizlari bilan ushlab turadi va namlikni saqlaydi.'],
+    ['Ortiqcha mol boqish', 'Mol haddan tashqari ko\u2018p boqilsa, o\u2018simliklar tiklanishga ulgurmaydi. Noto\u2018g\u2018ri sug\u2018orish esa tuproqni sho\u2018rlantiradi.'],
+    ['Tuproq eroziyasi', 'O\u2018simliksiz qolgan tuproqni shamol va suv yemiradi, unumdor qatlam yo\u2018qoladi, ariqlar quriydi.'],
+    ['Cho\u2018l', 'Oxir-oqibat yer cho\u2018lga aylanadi. BMT ma\u2019lumotlariga ko\u2018ra, quruq hududlar quruqlikning qariyb 40 foizini egallaydi va cho\u2018llanish xavfi ostida.']
+  ],
+  question: 'Nega o\u2018simlik qoplami yo\u2018qolgan yerda qum va chang bo\u2018ronlari ko\u2018payadi? Bunga o\u2018z hududingizdan misol keltiring.',
+  solution: 'Saksovul kabi qurg\u2018oqchilikka chidamli o\u2018simliklarni ekish, ihota daraxtzorlari barpo etish, yaylovlarda navbatlab boqish va tomchilatib sug\u2018orish qumni to\u2018xtatadi va tuproqni tiklaydi.',
+  build(p) {
+    const rand = rng(22);
+    const topMat = base(p, '#5aa35c');
+    const grassMat = M('#4f9a45'), gA = C('#4f9a45'), gB = C('#a39a55');
+    const tufts = [];
+    for (let i = 0; i < 150; i++) {
+      const a = rand() * 6.283, rr = Math.sqrt(rand()) * 9.3;
+      const m = mesh(new THREE.ConeGeometry(0.13, 0.5, 4), grassMat, Math.cos(a) * rr, 0.25, Math.sin(a) * rr, p);
+      m.castShadow = false; m.userData.thr = 0.15 + rand() * 0.6; tufts.push(m);
+    }
+    const bushes = [];
+    for (let i = 0; i < 16; i++) { const a = rand() * 6.283, rr = 2 + rand() * 7; const b = mesh(new THREE.IcosahedronGeometry(0.45, 0), M('#5b9b4a'), Math.cos(a) * rr, 0.35, Math.sin(a) * rr, p); b.userData.thr = 0.25 + rand() * 0.4; bushes.push(b); }
+    const trees = [[-5, -4], [4, -6], [6, 4], [-6, 5], [-2, 7]].map(([x, z], i) => { const t = roundTree(1); t.position.set(x, 0, z); t.userData.thr = 0.35 + i * 0.07; p.add(shadowAll(t)); return t; });
+    const flock = [];
+    for (let i = 0; i < 16; i++) { const s = sheep(); s.position.set(-1 + rand() * 6, 0, -2 + rand() * 5); s.rotation.y = rand() * 6; p.add(shadowAll(s)); flock.push(s); }
+    const canalMat = M('#3a9ad9', { roughness: 0.25, flatShading: false }), cA = C('#3a9ad9'), cB = C('#b8995e');
+    const canal = mesh(new THREE.BoxGeometry(18, 0.06, 0.7), canalMat, 0, 0.03, 3.2, p); canal.castShadow = false;
+    const crackMat = crackLines(p, rand, 40, -9, 9, 10, 0x8a6a45);
+    const duneMat = M('#dcb877'); const dunes = [];
+    for (let i = 0; i < 9; i++) { const a = rand() * 6.283, rr = 2 + rand() * 6.5; const dn = mesh(new THREE.SphereGeometry(1.2 + rand() * 1.1, 12, 8), duneMat, Math.cos(a) * rr, 0, Math.sin(a) * rr, p); dn.userData.sy = 0.35; dunes.push(dn); }
+    const sand = particles(500, 0xe3c48a, 0.25, p);
+    for (let i = 0; i < sand.n; i++) { sand.pos[i * 3] = (rand() - .5) * 20; sand.pos[i * 3 + 1] = rand() * 3; sand.pos[i * 3 + 2] = (rand() - .5) * 18; }
+    const solG = new THREE.Group(); p.add(solG);
+    for (let i = 0; i < 18; i++) { const a = rand() * 6.283, rr = 1.5 + rand() * 7.5; const sx = saxaul(0.9 + rand() * .4); sx.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr); solG.add(shadowAll(sx)); }
+    for (let i = 0; i < 7; i++) { const t = pineTree(0.9); t.position.set(-6 + i * 2, 0, 4.4); t.scale.set(0.6, 1.3, 0.6); solG.add(shadowAll(t)); }
+    const groundA = C('#5aa35c'), groundB = C('#d8b46e'), skyA = C('#9fd3f0'), skyB = C('#e6c796');
+    return (d, r, t, dt) => {
+      const e = d, rs = sm(r);
+      tufts.forEach(m => setS(m, cl((m.userData.thr - e) * 5) + rs * 0.6 * cl((m.userData.thr + 0.3 - e) * 3)));
+      bushes.forEach(m => setS(m, cl((m.userData.thr - e) * 5)));
+      trees.forEach(m => setS(m, cl((m.userData.thr - e) * 5)));
+      const flockS = cl(e * 5) * cl((0.8 - e) * 5);
+      flock.forEach((s, i) => { setS(s, flockS); s.position.x += Math.sin(t * 0.3 + i) * dt * 0.1; });
+      lerpC(gA, gB, cl(e * 1.4), grassMat.color);
+      lerpC(groundA, groundB, sm(e * 1.2) * (1 - rs * 0.35), topMat.color);
+      lerpC(cA, cB, cl((e - 0.3) * 1.8), canalMat.color); canal.scale.z = Math.max(0.15, 1 - cl((e - 0.3) * 1.5) * 0.85);
+      crackMat.opacity = cl((e - 0.4) * 2.5) * (1 - rs * 0.5);
+      dunes.forEach(dn => { const s = cl((e - 0.4) * 1.7); dn.scale.set(Math.max(S0, s), Math.max(S0, s * 0.35), Math.max(S0, s)); dn.visible = s > 0.01; });
+      setS(solG, rs);
+      sand.mat.opacity = cl((e - 0.55) * 2.5) * (1 - rs * 0.85) * 0.85;
+      if (sand.mat.opacity > 0.01) {
+        for (let i = 0; i < sand.n; i++) { let x = sand.pos[i * 3] + dt * (3 + sand.seed[i] * 3); if (x > 10) x -= 20; sand.pos[i * 3] = x; sand.pos[i * 3 + 1] = 0.2 + (sand.seed[i] * 3) + Math.sin(t * 2 + i) * 0.15; }
+        sand.geo.attributes.position.needsUpdate = true;
+      }
+      lerpC(skyA, skyB, sm(e) * (1 - rs * 0.4), env.sky); env.sunI = 1 + 0.3 * e;
+    };
+  }
+},
+{
+  key: 'orman', name: 'O\u2018rmonlarning kesilishi',
+  track: 'linear-gradient(90deg,#2f7d4f,#6f9a4a,#a8854f,#8b5a3a)',
+  stages: [
+    ['Qalin o\u2018rmon', 'O\u2018rmon karbonat angidridni yutadi, kislorod ishlab chiqaradi, tuproqni mustahkamlaydi va minglab tur uchun yashash joyi hisoblanadi.'],
+    ['Kesish boshlandi', 'Yog\u2018och olish, yaylov va qurilish uchun daraxtlar kesila boshlaydi. Hayvonlar yashash joyini yo\u2018qotadi.'],
+    ['Ko\u2018p qismi kesildi', 'FAO ma\u2019lumotlariga ko\u2018ra, 2015\u20132020-yillarda dunyoda har yili taxminan 10 million gektar o\u2018rmon kesilgan.'],
+    ['Eroziya va sel xavfi', 'Ildizlar yo\u2018qolgach, yomg\u2018ir tuproqni yuvib ketadi: daryo loyqalanadi, sel va ko\u2018chki xavfi ortadi.']
+  ],
+  question: 'Bitta o\u2018rmon kesilganda ekotizimning qaysi qismlari zarar ko\u2018radi? Hayvonlar, tuproq, suv va havo o\u2018rtasidagi bog\u2018liqlikni chizib ko\u2018rsating.',
+  solution: 'Qayta o\u2018rmonlashtirish, qog\u2018ozni qayta ishlash va yog\u2018ochni barqaror tayyorlash o\u2018rmonni tiklaydi. O\u2018zbekistonda \u201CYashil makon\u201D umummilliy loyihasi doirasida har yili millionlab ko\u2018chat ekilmoqda.',
+  build(p) {
+    const rand = rng(33);
+    const topMat = base(p, '#4f9a4f');
+    const riverMat = M('#3a9ad9', { roughness: 0.2, flatShading: false }), rA = C('#3a9ad9'), rB = C('#8a6a45');
+    const sh = new THREE.Shape();
+    sh.moveTo(3.6, -9.2); sh.bezierCurveTo(5.8, -4, 2.8, 0, 5.2, 4); sh.bezierCurveTo(6.2, 6, 6.2, 7.2, 6.0, 8.1);
+    sh.lineTo(7.4, 7.0); sh.bezierCurveTo(7.4, 5.5, 7, 3.8, 6.4, 3.2); sh.bezierCurveTo(4.6, 0, 7.4, -4, 5.4, -8.6); sh.closePath();
+    const river = mesh(new THREE.ShapeGeometry(sh, 24), riverMat, 0, 0.03, 0, p); river.rotation.x = Math.PI / 2; river.castShadow = false;
+    const leafA = M('#3f8a45'), leafB = M('#2f7d4f');
+    const trees = [];
+    let tries = 0;
+    while (trees.length < 62 && tries++ < 800) {
+      const a = rand() * 6.283, rr = Math.sqrt(rand()) * 9.2, x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+      if (x > 2.6 && x < 8 ) continue;
+      if (trees.some(o => (o.x - x) ** 2 + (o.z - z) ** 2 < 1.3)) continue;
+      const kind = rand() < .5;
+      const g = kind ? pineTree(0.8 + rand() * .5, leafB) : roundTree(0.8 + rand() * .5, leafA);
+      g.position.set(x, 0, z); p.add(shadowAll(g));
+      const st = stump(); st.position.set(x, 0, z); p.add(shadowAll(st)); setS(st, 0);
+      const sap = roundTree(0.45, leafA); sap.position.set(x + 0.4, 0, z + 0.3); p.add(shadowAll(sap)); setS(sap, 0);
+      trees.push({ g, st, sap, x, z, thr: 0.05 + rand() * 0.8, base: g.scale.x, dir: rand() < .5 ? 1 : -1 });
+    }
+    const logs = new THREE.Group(); logs.position.set(-6, 0, 5.5); p.add(logs);
+    for (let i = 0; i < 6; i++) { const l = mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.2, 8), M('#8a5e3a'), (i % 3) * 0.38 - 0.38, 0.18 + Math.floor(i / 3) * 0.33, 0, logs); l.rotation.x = Math.PI / 2; }
+    const gullyMat = crackLines(p, rand, 30, -9, 2.5, 10, 0x6b4a2e);
+    const deers = [[-3, -2], [-5, 1], [0, -5]].map(([x, z]) => { const dd = deer(); dd.position.set(x, 0, z); dd.rotation.y = rand() * 6; p.add(shadowAll(dd)); return dd; });
+    const gA = C('#4f9a4f'), gB = C('#8b6b4a'), skyA = C('#9fd3f0'), skyB = C('#c9c2a8');
+    return (d, r, t, dt) => {
+      const rs = sm(r);
+      trees.forEach(o => {
+        const fall = cl((d - o.thr) * 10);
+        o.g.rotation.z = fall * 1.45 * o.dir;
+        setS(o.g, fall >= 1 ? 0 : o.base);
+        setS(o.st, fall > 0 ? 1 : 0);
+        setS(o.sap, fall > 0 ? rs : 0);
+      });
+      setS(logs, cl(d * 5) * cl((0.9 - d) * 5));
+      gullyMat.opacity = cl((d - 0.6) * 2.5) * (1 - rs * 0.7);
+      deers.forEach((dd, i) => { setS(dd, 1 - cl((d - 0.1 * i) * 2.5)); dd.position.y = Math.abs(Math.sin(t * 2 + i)) * 0.05; });
+      lerpC(rA, rB, cl((d - 0.4) * 1.7) * (1 - rs * 0.6), riverMat.color);
+      lerpC(gA, gB, cl((d - 0.3) * 1.4) * (1 - rs * 0.55), topMat.color);
+      lerpC(skyA, skyB, d * 0.7, env.sky); env.sunI = 1;
+    };
+  }
+},
+{
+  key: 'orol', name: 'Orol dengizi fojiasi',
+  track: 'linear-gradient(90deg,#2f86c9,#6aa6c4,#c9b48a,#e7e0cf)',
+  stages: [
+    ['1960-yil', '1960-yilda Orol dengizi dunyodagi eng yirik ko\u2018llardan biri edi, maydoni taxminan 68 ming km\u00B2 bo\u2018lgan. Qirg\u2018oq bo\u2018yida baliqchilik rivojlangan.'],
+    ['1980-yil', 'Amudaryo va Sirdaryo suvi paxta dalalarini sug\u2018orish uchun ko\u2018plab olingani sababli dengizga juda kam suv yetib bordi. Suv sathi keskin pasaya boshladi.'],
+    ['2000-yil', 'Dengiz shimoliy (Kichik) va janubiy (Katta) Orolga bo\u2018linib ketdi. Suvning sho\u2018rligi oshib, baliqlarning aksariyat turi yo\u2018qoldi, kemalar quruqlikda qoldi.'],
+    ['Bugun', 'Katta Orolning sharqiy qismi deyarli butunlay qurib, o\u2018rnida Orolqum cho\u2018li paydo bo\u2018ldi. Sho\u2018r changli bo\u2018ronlar aholi salomatligiga zarar yetkazmoqda.']
+  ],
+  question: 'Suvni tejash Orol muammosini yumshatishga qanday yordam beradi? Maktabingiz va uyingizda qo\u2018llash mumkin bo\u2018lgan 3 ta chorani taklif qiling.',
+  solution: 'Qurigan dengiz tubida saksovul o\u2018rmonlari barpo etilmoqda, ular qum va sho\u2018r changni ushlab qoladi. Ko\u2018karal to\u2018g\u2018oni (2005) Kichik Orolda suv sathini qisman tikladi. Tomchilatib sug\u2018orish suvni sezilarli tejaydi.',
+  build(p) {
+    const rand = rng(44);
+    base(p, '#b89a6a');
+    const bedMat = M('#c9b48a'), bA = C('#c9b48a'), bB = C('#e4dccb');
+    const bed = mesh(new THREE.CircleGeometry(8.4, 48), bedMat, 0.3, 0.006, 0.4, p); bed.rotation.x = -Math.PI / 2;
+    const saltMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0, roughness: 1 });
+    for (let i = 0; i < 14; i++) { const s = mesh(new THREE.CircleGeometry(0.4 + rand() * 0.9, 12), saltMat, 1 + rand() * 5.5, 0.012, -2 + rand() * 7, p); s.rotation.x = -Math.PI / 2; s.castShadow = false; }
+    const waterMat = M('#2f86c9', { roughness: 0.18, flatShading: false }), wA = C('#2f86c9'), wB = C('#5a9fae');
+    const south = mesh(new THREE.CircleGeometry(1, 48), waterMat, 0.8, 0.02, 1.4, p); south.rotation.x = -Math.PI / 2; south.castShadow = false;
+    const north = mesh(new THREE.CircleGeometry(1, 40), waterMat, -1.6, 0.022, -5.7, p); north.rotation.x = -Math.PI / 2; north.castShadow = false;
+    const hullMat = M('#e8e4da'), hA = C('#e8e4da'), hB = C('#8a4b2c');
+    const boats = [[4.2, 1.8, .4], [2.6, -1.6, 1.8], [3.2, 4.4, -.6], [0.6, 5.0, 2.4]].map(([x, z, ry]) => { const b = boat(hullMat); b.position.set(x, 0, z); b.rotation.y = ry; p.add(shadowAll(b)); return b; });
+    for (let i = 0; i < 6; i++) { const a = -0.9 + i * 0.3, h = house(); h.position.set(Math.cos(a) * 9.1, 0, Math.sin(a) * 9.1); h.rotation.y = -a; p.add(shadowAll(h)); }
+    const dust = particles(600, 0xf2eee4, 0.35, p);
+    for (let i = 0; i < dust.n; i++) { dust.pos[i * 3 + 1] = rand() * 4; }
+    const solG = new THREE.Group(); p.add(solG);
+    for (let i = 0; i < 26; i++) { const sx = saxaul(0.8 + rand() * .4); sx.position.set(1.8 + rand() * 5, 0, -3 + rand() * 8); if (sx.position.x ** 2 + sx.position.z ** 2 > 70) continue; solG.add(shadowAll(sx)); }
+    const skyA = C('#9fd3f0'), skyB = C('#d9cdb6');
+    return (d, r, t, dt) => {
+      const e = d, rs = sm(r);
+      south.scale.set(6.5 * (1 - 0.74 * e), 5.4 * (1 - 0.45 * e), 1);
+      south.position.x = 0.8 - 3.6 * e; south.position.z = 1.4 + 0.2 * e;
+      north.scale.set(2.2 * (1 - 0.35 * cl(e * 1.5)), 1.5 * (1 - 0.35 * cl(e * 1.5)), 1);
+      lerpC(wA, wB, e, waterMat.color);
+      lerpC(bA, bB, cl((e - 0.3) * 1.5), bedMat.color);
+      saltMat.opacity = cl((e - 0.35) * 1.8) * 0.9;
+      boats.forEach((b, i) => { const k = cl((e - 0.25 - i * 0.05) * 2.5); b.rotation.z = k * 0.3; b.position.y = -k * 0.12 + (1 - k) * Math.sin(t * 1.5 + i) * 0.04; });
+      lerpC(hA, hB, cl((e - 0.4) * 1.6), hullMat.color);
+      setS(solG, rs * cl((e - 0.45) * 2.5));
+      dust.mat.opacity = cl((e - 0.6) * 2.5) * (1 - rs * 0.8) * 0.8;
+      if (dust.mat.opacity > 0.01) {
+        for (let i = 0; i < dust.n; i++) {
+          const a = t * (0.25 + dust.seed[i] * 0.3) + dust.seed[i] * 40, rr = 1 + dust.seed[i] * 7;
+          dust.pos[i * 3] = 2 + Math.cos(a) * rr * 0.8; dust.pos[i * 3 + 2] = 1 + Math.sin(a) * rr * 0.9;
+          dust.pos[i * 3 + 1] = 0.3 + ((dust.seed[i] * 5 + t * 0.3) % 4);
+        }
+        dust.geo.attributes.position.needsUpdate = true;
+      }
+      lerpC(skyA, skyB, e, env.sky); env.sunI = 1 + 0.2 * e;
+    };
+  }
+},
+{
+  key: 'havo', name: 'Havo ifloslanishi',
+  track: 'linear-gradient(90deg,#5fb36a,#a9a46a,#8d8378,#5a4f4a)',
+  stages: [
+    ['Toza havo', 'Toza havo sog\u2018lom hayot asosidir. Daraxtlar changni ushlab qoladi va havoni tozalaydi.'],
+    ['Sanoat o\u2018sishi', 'Filtrsiz zavodlar havoga chang, oltingugurt va azot oksidlarini chiqaradi.'],
+    ['Transport tutuni', 'Avtomobillar ko\u2018payishi bilan shaharlarda PM2.5 deb ataladigan mayda zarrachalar miqdori ortadi.'],
+    ['Smog', 'JSST ma\u2019lumotlariga ko\u2018ra, dunyo aholisining qariyb 99 foizi havo sifati bo\u2018yicha tavsiya etilgan me\u2019yordan yuqori ifloslangan havodan nafas oladi.']
+  ],
+  question: 'Maktabingiz atrofidagi havo sifatini yaxshilash uchun o\u2018quvchilar qanday 3 ta amaliy ish qila oladi?',
+  solution: 'Zavodlarga filtr o\u2018rnatish, jamoat va elektr transporti, velosiped, quyosh energiyasi va ko\u2018kalamzorlashtirish havoni tozalaydi.',
+  build(p) {
+    const rand = rng(55);
+    const topMat = base(p, '#6aa860');
+    const road = mesh(new THREE.RingGeometry(7.9, 8.9, 64), M('#4a4a4c'), 0, 0.01, 0, p); road.rotation.x = -Math.PI / 2; road.castShadow = false;
+    const fac = new THREE.Group(); fac.position.set(-4.6, 0, -2.6); p.add(fac);
+    mesh(new THREE.BoxGeometry(4, 2.1, 2.5), M('#5b5352'), 0, 1.05, 0, fac);
+    const winMat = M('#e0b451', { emissive: 0x6a4a10, emissiveIntensity: 0.5 });
+    for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(0.55, 0.45, 0.05), winMat, -1.4 + i * 0.95, 1.15, 1.26, fac);
+    const chim = [[-1.1, 5], [0.2, 6], [1.4, 4.6]];
+    const filters = [];
+    chim.forEach(([x, h]) => {
+      mesh(new THREE.CylinderGeometry(0.27, 0.38, h, 12), M('#6e6260'), x, h / 2, -0.5, fac);
+      mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.22, 12), M('#a8403a'), x, h * 0.8, -0.5, fac);
+      const f = mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.35, 12), M('#3fae5f'), x, h + 0.15, -0.5, fac); filters.push(f);
+    });
+    const smoke = particles(700, 0x3d3836, 0.9, p);
+    const cols = ['#c9ccd1', '#b8bcc4', '#d6cbb8', '#a9b3bf'];
+    for (let i = 0; i < 13; i++) {
+      const a = -1.2 + (i / 12) * 2.9, rr = 3.5 + rand() * 3.4, h = 1.5 + rand() * 3.5;
+      const b = mesh(new THREE.BoxGeometry(1.1, h, 1.1), M(cols[i % 4]), Math.cos(a) * rr, h / 2, Math.sin(a) * rr, p);
+      b.rotation.y = -a;
+    }
+    const trees = [];
+    for (let i = 0; i < 9; i++) { const a = 2.2 + rand() * 1.6, rr = 3 + rand() * 4; const t = roundTree(0.8); t.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr); p.add(shadowAll(t)); }
+    const carCols = ['#d9453b', '#3a6fd9', '#f2c14e', '#eeeeee', '#2c2c2c'];
+    const cars = [];
+    for (let i = 0; i < 18; i++) { const c = mesh(new THREE.BoxGeometry(0.5, 0.3, 0.9), M(carCols[i % 5]), 0, 0.18, 0, p); c.userData = { a: (i / 18) * 6.283, lane: i % 2 ? 8.15 : 8.65, sp: (i % 2 ? 1 : -1) * (0.18 + rand() * 0.1) }; cars.push(c); }
+    const smogMat = new THREE.MeshStandardMaterial({ color: 0x8a7a66, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const smog = new THREE.Mesh(new THREE.SphereGeometry(11, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), smogMat); p.add(smog);
+    const solG = new THREE.Group(); p.add(solG);
+    [[-1.5, 4], [-0.2, 4.6], [-2.8, 5.2], [-1.4, 5.7]].forEach(([x, z]) => { const s = solarPanel(); s.position.set(x, 0, z); solG.add(shadowAll(s)); });
+    const gA = C('#6aa860'), gB = C('#8f8a6a'), skyA = C('#9fd3f0'), skyB = C('#8d8378');
+    const chimTop = chim.map(([x, h]) => [fac.position.x + x, h, fac.position.z - 0.5]);
+    return (d, r, t, dt) => {
+      const rs = sm(r);
+      filters.forEach(f => setS(f, rs));
+      setS(solG, rs);
+      const active = Math.round(4 + 14 * d);
+      cars.forEach((c, i) => { c.visible = i < active; c.userData.a += dt * c.userData.sp; const a = c.userData.a; c.position.x = Math.cos(a) * c.userData.lane; c.position.z = Math.sin(a) * c.userData.lane; c.rotation.y = -a; });
+      smoke.mat.opacity = cl(d * 1.6) * (1 - rs * 0.85) * 0.8;
+      if (smoke.mat.opacity > 0.01) {
+        for (let i = 0; i < smoke.n; i++) {
+          const ch = chimTop[i % 3], u = (smoke.seed[i] + t * 0.08) % 1;
+          smoke.pos[i * 3] = ch[0] + u * 4 + Math.sin(t + i) * 0.3 * u;
+          smoke.pos[i * 3 + 1] = ch[1] + u * 6;
+          smoke.pos[i * 3 + 2] = ch[2] + u * 1.5 + Math.cos(i) * 0.4 * u;
+        }
+        smoke.geo.attributes.position.needsUpdate = true;
+      }
+      smogMat.opacity = cl((d - 0.35) * 1.5) * 0.42 * (1 - rs * 0.7); smog.visible = smogMat.opacity > 0.01;
+      lerpC(gA, gB, d * 0.6 * (1 - rs * 0.5), topMat.color);
+      lerpC(skyA, skyB, d * (1 - rs * 0.6), env.sky); env.sunI = 1 - 0.3 * d;
+    };
+  }
+}
+];
+
+// ---------------- state + UI ----------------
+const env = { sky: new THREE.Color('#9fd3f0'), sunI: 1 };
+let cur = 0, dTarget = 0, d = 0, rTarget = 0, r = 0;
+const $ = id => document.getElementById(id);
+const tabs = $('tabs'), slider = $('slider'), ticks = $('ticks');
+
+SCENES.forEach((s, i) => {
+  const b = document.createElement('button');
+  b.setAttribute('role', 'tab'); b.textContent = s.name; b.id = 'tab-' + s.key;
+  b.addEventListener('click', () => loadScene(i));
+  tabs.appendChild(b);
+});
+for (let i = 0; i < 4; i++) {
+  const b = document.createElement('button');
+  b.addEventListener('click', () => { dTarget = i / 3; slider.value = dTarget * 1000; refreshText(); });
+  ticks.appendChild(b);
+}
+slider.addEventListener('input', () => { dTarget = slider.value / 1000; refreshText(); });
+$('sol').addEventListener('click', toggleSolution);
+$('collapse').addEventListener('click', () => {
+  const p = $('panel'); p.classList.toggle('min');
+  const min = p.classList.contains('min');
+  $('collapse').textContent = min ? 'Ochish' : 'Yig\u2018ish'; $('collapse').setAttribute('aria-expanded', String(!min));
+});
+function toggleSolution() {
+  rTarget = rTarget ? 0 : 1;
+  $('sol').setAttribute('aria-pressed', String(!!rTarget));
+  $('sol').textContent = rTarget ? 'Yechimni yashirish' : 'Yechimni ko\u2018rsatish';
+  $('soltext').classList.toggle('show', !!rTarget);
+  drawVRPanel();
+}
+function stageIndex() { return Math.min(3, Math.round(dTarget * 3)); }
+function refreshText() {
+  const s = SCENES[cur], k = stageIndex();
+  $('stageName').textContent = s.stages[k][0];
+  $('fact').textContent = s.stages[k][1];
+  [...ticks.children].forEach((b, i) => b.classList.toggle('on', i === k));
+  drawVRPanel();
+}
+function loadScene(i) {
+  cur = i; const s = SCENES[i];
+  if (content) { root.remove(content); content.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  content = new THREE.Group(); root.add(content);
+  updateFn = s.build(content);
+  dTarget = 0; d = 0; slider.value = 0; rTarget = 1; toggleSolution();
+  r = 0;
+  $('sceneTitle').textContent = s.name;
+  $('question').textContent = s.question;
+  $('soltext').textContent = s.solution;
+  slider.style.setProperty('--track', s.track);
+  [...ticks.children].forEach((b, k) => b.textContent = s.stages[k][0]);
+  [...tabs.children].forEach((b, k) => b.setAttribute('aria-selected', String(k === i)));
+  tabs.children[i].scrollIntoView({ inline: 'center', block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  refreshText();
+}
+
+// ---------------- toast ----------------
+function toast(html) { $('toastText').innerHTML = html; $('toast').classList.add('show'); }
+$('toastOk').addEventListener('click', () => $('toast').classList.remove('show'));
+
+// ---------------- orbit controls (normal + camera mode) ----------------
+let theta = -0.5, phi = 1.05, dist = 34, auto = !reduceMotion, lastI = 0;
+const ptrs = new Map(); let pinch0 = 0, dist0 = dist;
+canvas.addEventListener('pointerdown', e => {
+  if (renderer.xr.isPresenting) return;
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); auto = false;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = dist; }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  if (ptrs.size === 1) { theta -= (e.clientX - p.x) * 0.006; phi = Math.min(1.5, Math.max(0.3, phi - (e.clientY - p.y) * 0.005)); }
+  p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; dist = Math.min(70, Math.max(12, dist0 * pinch0 / Math.hypot(a.x - b.x, a.y - b.y))); }
+  lastI = performance.now();
+});
+const up = e => { ptrs.delete(e.pointerId); lastI = performance.now(); };
+canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(70, Math.max(12, dist * (1 + e.deltaY * 0.001))); }, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowLeft') theta += 0.1; if (e.key === 'ArrowRight') theta -= 0.1;
+});
+
+function resize() {
+  if (renderer.xr.isPresenting) return;
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w < h ? 58 : 42; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize); resize();
+
+// ---------------- modes: WebXR AR, camera AR, VR ----------------
+let mode = 'normal';           // normal | cam | ar | vr
+let hitSource = null, placed = false;
+const reticle = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.09, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x86d98f }));
+reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
+const vrFloor = new THREE.Mesh(new THREE.CircleGeometry(6, 48).rotateX(-Math.PI / 2), M('#2c3a33'));
+vrFloor.receiveShadow = true; vrFloor.visible = false; scene.add(vrFloor);
+
+function setModeButtons() {
+  $('btnAR').setAttribute('aria-pressed', String(mode === 'ar'));
+  $('btnVR').setAttribute('aria-pressed', String(mode === 'vr'));
+  $('btnCam').setAttribute('aria-pressed', String(mode === 'cam'));
+}
+function resetRoot() { root.position.set(0, 0, 0); root.scale.setScalar(1); root.visible = true; }
+
+const controllers = [0, 1].map(i => {
+  const c = renderer.xr.getController(i); scene.add(c);
+  c.addEventListener('select', () => {
+    if (mode === 'ar') {
+      if (reticle.visible) { root.position.setFromMatrixPosition(reticle.matrix); root.visible = true; placed = true; $('arHint').style.display = 'none'; }
+    } else if (mode === 'vr') {
+      const k = (stageIndex() + 1) % 4; dTarget = k / 3; slider.value = dTarget * 1000; refreshText();
+    }
+  });
+  c.addEventListener('squeeze', () => { if (mode === 'vr') toggleSolution(); });
+  return c;
+});
+
+// ---------------- VR: controller rays, info panel, gamepad ----------------
+const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+controllers.forEach(c => {
+  const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0x86d98f, transparent: true, opacity: 0.7 }));
+  ray.scale.z = 3; ray.name = 'ray'; ray.visible = false; c.add(ray);
+});
+const vrCanvas = document.createElement('canvas'); vrCanvas.width = 1024; vrCanvas.height = 640;
+const vrCtx = vrCanvas.getContext('2d');
+const vrTex = new THREE.CanvasTexture(vrCanvas); vrTex.encoding = THREE.sRGBEncoding;
+const vrPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.75),
+  new THREE.MeshBasicMaterial({ map: vrTex, transparent: true, side: THREE.DoubleSide }));
+vrPanel.position.set(-1.35, 1.45, -1.55); vrPanel.rotation.y = 0.55; vrPanel.visible = false; scene.add(vrPanel);
+
+function wrapText(ctx, text, x, y, maxW, lh, maxLines) {
+  const words = String(text || '').split(/\s+/); let line = '', n = 0;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, y); y += lh; line = w;
+      if (++n >= maxLines - 1) { line += '\u2026'; break; }
+    } else line = test;
+  }
+  if (line) { ctx.fillText(line, x, y); y += lh; }
+  return y;
+}
+function drawVRPanel() {
+  const s = SCENES[cur]; if (!s) return;
+  const k = stageIndex(), c = vrCtx, W = vrCanvas.width, H = vrCanvas.height;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = 'rgba(16,30,24,0.88)'; c.beginPath();
+  if (c.roundRect) c.roundRect(0, 0, W, H, 36); else c.rect(0, 0, W, H); c.fill();
+  c.fillStyle = '#86d98f'; c.font = '600 30px Manrope, Arial, sans-serif';
+  c.fillText('Vaziyat ' + (cur + 1) + ' / ' + SCENES.length + '   \u2022   Bosqich ' + (k + 1) + ' / 4', 48, 66);
+  c.fillStyle = '#ffffff'; c.font = '700 46px Unbounded, Arial, sans-serif';
+  let y = wrapText(c, s.name, 48, 128, W - 96, 54, 2);
+  c.fillStyle = '#ffd27a'; c.font = '700 34px Manrope, Arial, sans-serif';
+  y = wrapText(c, s.stages[k][0], 48, y + 14, W - 96, 42, 1);
+  c.fillStyle = '#dfe9e3'; c.font = '400 30px Manrope, Arial, sans-serif';
+  y = wrapText(c, rTarget ? s.solution : s.stages[k][1], 48, y + 6, W - 96, 38, rTarget ? 6 : 5);
+  c.fillStyle = 'rgba(255,255,255,0.55)'; c.font = '400 24px Manrope, Arial, sans-serif';
+  c.fillText('Trigger: keyingi bosqich   \u2022   Grip: yechim', 48, H - 72);
+  c.fillText('Joystik \u2190 \u2192  yoki  A/B, X/Y: vaziyatni almashtirish', 48, H - 36);
+  vrTex.needsUpdate = true;
+}
+let padLock = 0;
+function pollGamepads(t) {
+  const session = renderer.xr.getSession(); if (!session || mode !== 'vr') return;
+  let dir = 0;
+  for (const src of session.inputSources) {
+    const gp = src.gamepad; if (!gp) continue;
+    const ax = gp.axes.length > 2 ? gp.axes[2] : (gp.axes[0] || 0);
+    if (ax > 0.7) dir = 1; else if (ax < -0.7) dir = -1;
+    if (gp.buttons[4] && gp.buttons[4].pressed) dir = 1;
+    if (gp.buttons[5] && gp.buttons[5].pressed) dir = -1;
+  }
+  if (dir && t > padLock) {
+    padLock = t + 0.6;
+    loadScene((cur + dir + SCENES.length) % SCENES.length);
+  }
+  if (!dir) padLock = 0;
+}
+// panel taps in AR must not place the model
+$('panel').addEventListener('beforexrselect', e => e.preventDefault());
+document.querySelector('header').addEventListener('beforexrselect', e => e.preventDefault());
+
+async function startAR() {
+  if (mode === 'ar') { renderer.xr.getSession() && renderer.xr.getSession().end(); return; }
+  if (!navigator.xr || !(await navigator.xr.isSessionSupported('immersive-ar').catch(() => false))) {
+    toast('Bu qurilma yoki brauzer WebXR AR ni qo\u2018llamaydi. <b>Android + Chrome</b> (ARCore) kerak. iPhone\u2019da yoki shu sahifa ichida ishlamasa, <b>\u201CKamera\u201D</b> rejimidan foydalaning: 3D model kamera tasviri ustida ko\u2018rinadi.');
+    return;
+  }
+  try {
+    stopCam();
+    const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['hit-test'], optionalFeatures: ['dom-overlay'], domOverlay: { root: $('ui') } });
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(session);
+    mode = 'ar'; setModeButtons(); placed = false;
+    scene.background = null; scene.fog = null;
+    root.scale.setScalar(0.03); root.visible = false;
+    $('arHint').style.display = 'block';
+    const viewer = await session.requestReferenceSpace('viewer');
+    hitSource = await session.requestHitTestSource({ space: viewer });
+    session.addEventListener('end', endXR);
+  } catch (err) {
+    toast('AR sessiyasi ochilmadi: ' + (err && err.message ? err.message : err) + '<br>Sahifani alohida brauzer oynasida oching yoki \u201CKamera\u201D rejimini tanlang.');
+  }
+}
+async function startVR() {
+  if (mode === 'vr') { renderer.xr.getSession() && renderer.xr.getSession().end(); return; }
+  if (!navigator.xr || !(await navigator.xr.isSessionSupported('immersive-vr').catch(() => false))) {
+    toast('VR rejimi uchun VR ko\u2018zoynak brauzeri kerak (masalan, Meta Quest Browser). Sahifani ko\u2018zoynak brauzerida ochib, \u201CVR\u201D tugmasini bosing.<br><br>VR ichida: <b>trigger</b> tugmasi keyingi bosqichga o\u2018tkazadi, <b>yon (grip)</b> tugmasi yechimni ko\u2018rsatadi.');
+    return;
+  }
+  try {
+    stopCam();
+    const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
+    renderer.xr.setReferenceSpaceType('local-floor');
+    await renderer.xr.setSession(session);
+    mode = 'vr'; setModeButtons();
+    root.position.set(0, 0.75, -1.9); root.scale.setScalar(0.075);
+    vrFloor.visible = true; scene.fog = null;
+    vrPanel.visible = true; drawVRPanel();
+    controllers.forEach(c => { const ray = c.getObjectByName('ray'); if (ray) ray.visible = true; });
+    session.addEventListener('end', endXR);
+  } catch (err) {
+    toast('VR sessiyasi ochilmadi: ' + (err && err.message ? err.message : err));
+  }
+}
+function endXR() {
+  hitSource = null; reticle.visible = false; vrFloor.visible = false; vrPanel.visible = false;
+  controllers.forEach(c => { const ray = c.getObjectByName('ray'); if (ray) ray.visible = false; });
+  $('arHint').style.display = 'none';
+  mode = 'normal'; setModeButtons(); resetRoot();
+  scene.background = env.sky.clone(); scene.fog = new THREE.Fog(env.sky.clone(), 60, 140);
+  resize();
+}
+let camStream = null;
+async function startCam() {
+  if (mode === 'cam') { stopCam(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Bu brauzer kameraga kirishni qo\u2018llamaydi.'); return; }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+    const v = $('cam'); v.srcObject = camStream; await v.play(); v.style.display = 'block';
+    mode = 'cam'; setModeButtons();
+    scene.background = null; scene.fog = null; dist = 30;
+  } catch (err) {
+    toast('Kamera ochilmadi. Brauzerga kameradan foydalanishga ruxsat bering. Agar sahifa boshqa sayt ichida ochilgan bo\u2018lsa, uni alohida oynada oching.');
+  }
+}
+function stopCam() {
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  camStream = null; $('cam').style.display = 'none';
+  if (mode === 'cam') { mode = 'normal'; setModeButtons(); scene.background = env.sky.clone(); scene.fog = new THREE.Fog(env.sky.clone(), 60, 140); }
+}
+$('btnAR').addEventListener('click', startAR);
+$('btnVR').addEventListener('click', startVR);
+$('btnCam').addEventListener('click', startCam);
+
+// ---------------- loop ----------------
+const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3(0, 2, 0);
+renderer.setAnimationLoop((time, frame) => {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  d += (dTarget - d) * Math.min(1, dt * 3);
+  r += (rTarget - r) * Math.min(1, dt * 2.5);
+  pollGamepads(t);
+  if (updateFn) updateFn(d, r, reduceMotion ? t * 0.3 : t, reduceMotion ? dt * 0.3 : dt);
+  sun.intensity = env.sunI; hemi.intensity = 0.5 + 0.1 * env.sunI;
+
+  if (mode === 'normal' || mode === 'vr') {
+    if (scene.background && scene.background.isColor) scene.background.copy(env.sky);
+    if (scene.fog) scene.fog.color.copy(env.sky);
+  }
+  if (mode === 'ar' && frame && hitSource) {
+    const res = frame.getHitTestResults(hitSource);
+    if (res.length) { const pose = res[0].getPose(renderer.xr.getReferenceSpace()); reticle.visible = !placed; reticle.matrix.fromArray(pose.transform.matrix); }
+    else reticle.visible = false;
+  }
+  if (!renderer.xr.isPresenting) {
+    if (!auto && !ptrs.size && performance.now() - lastI > 7000 && !reduceMotion && mode === 'normal') auto = true;
+    if (auto) theta += dt * 0.1;
+    const dd = dist * (camera.aspect < 0.8 ? 1.35 : 1);
+    camera.position.set(dd * Math.sin(phi) * Math.sin(theta), dd * Math.cos(phi) + 1, dd * Math.sin(phi) * Math.cos(theta));
+    camera.lookAt(camTarget);
+  }
+  // keep shadow camera following the model
+  sun.target.position.copy(root.position);
+  sun.position.set(root.position.x + 14, root.position.y + 22, root.position.z + 10);
+  renderer.render(scene, camera);
+});
+
+// initial scene (supports ?sahna=orol etc. for scene-specific QR codes)
+const qs = new URLSearchParams(location.search).get('sahna');
+const startIdx = Math.max(0, SCENES.findIndex(s => s.key === qs));
+loadScene(startIdx);
+})();
+</script>
+</body>
+</html>
