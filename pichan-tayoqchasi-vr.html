@@ -1,0 +1,560 @@
+<title>Pichan tayoqchasi VR laboratoriyasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: to‘liq ekranli 3D sahna; ustida ingichka boshqaruv chizig‘i. Ataylab bitta qorong‘i ko‘rinish (asbob paneli). */
+:root{
+  --bg:#0c1418; --panel:rgba(12,20,24,.86); --line:#2b3a40; --ink:#e4eef0; --muted:#93a7ac; --accent:#7ef0b0; --warn:#e8c25a;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif; --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden}
+#app{position:fixed;inset:0}
+#app canvas{display:block;touch-action:none}
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;pointer-events:none}
+.brand{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;pointer-events:auto;backdrop-filter:blur(6px);max-width:min(420px,100%)}
+.brand b{display:block;font-family:var(--f-display);font-size:1.15rem;font-weight:800;letter-spacing:-.01em}
+.brand span{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;pointer-events:auto}
+.acts button{font:inherit;font-weight:700;font-size:.92rem;border-radius:10px;padding:10px 14px;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--ink);backdrop-filter:blur(6px)}
+.acts button.vr{background:var(--accent);color:#0b1a12;border-color:var(--accent)}
+.acts button:hover{filter:brightness(1.1)}
+button:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
+.hint{position:fixed;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);right:16px;display:flex;justify-content:center;pointer-events:none}
+.hint p{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:.88rem;color:var(--muted);max-width:720px;text-align:center}
+.hint b{color:var(--ink)}
+.toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#101b20;border:1px solid var(--warn);border-radius:14px;padding:18px 20px;max-width:min(520px,calc(100% - 32px));font-size:.98rem;line-height:1.5;z-index:5;display:flex;flex-direction:column;gap:12px}
+.toast button{align-self:flex-end;font:inherit;font-weight:700;border:0;border-radius:8px;padding:8px 14px;background:var(--warn);color:#231a05;cursor:pointer}
+.fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .45s}
+.loading{position:fixed;inset:0;display:grid;place-items:center;font-family:var(--f-mono);color:var(--muted);background:var(--bg);z-index:4}
+</style>
+
+<div id="app"></div>
+<div class="hud">
+  <div class="brand"><b>Pichan tayoqchasi · 3D laboratoriya</b><span>Bacillus subtilis · WebXR: VR / AR</span></div>
+  <div class="acts">
+    <button type="button" class="vr" id="vrBtn">VR shlemda ochish</button>
+    <button type="button" id="arBtn">AR rejim</button>
+    <button type="button" id="microBtn">Preparat ichiga</button>
+  </div>
+</div>
+<div class="hint"><p id="hint"><b>Sichqoncha / barmoq:</b> aylantirish · <b>g‘ildirak / ikki barmoq:</b> yaqinlashtirish · <b>bosish:</b> yashil strelka ko‘rsatgan jism yoki paneldagi tugma</p></div>
+<div class="toast" id="toast" hidden><p id="toastTxt"></p><button type="button" id="toastOk">Tushunarli</button></div>
+<div class="fade" id="fade"></div>
+<div class="loading" id="loading">3D sahna yuklanmoqda…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+if(!window.THREE){$('#loading').textContent='3D kutubxona yuklanmadi. Internet aloqasini tekshiring.';return}
+const T=THREE, V=(x,y,z)=>new T.Vector3(x,y,z), R=Math.random, PI=Math.PI, B=0.9;
+const F="'Source Sans 3','Segoe UI',system-ui,sans-serif", FM="'JetBrains Mono',ui-monospace,monospace";
+function toast(t){$('#toastTxt').textContent=t;$('#toast').hidden=false}
+$('#toastOk').onclick=()=>{$('#toast').hidden=true};
+
+/* ============ RENDERER / SCENE ============ */
+const renderer=new T.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(2,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;
+$('#app').appendChild(renderer.domElement);
+const scene=new T.Scene();
+const BG_LAB=new T.Color(0xd9e1de);scene.background=BG_LAB;
+const camera=new T.PerspectiveCamera(60,innerWidth/innerHeight,0.01,80);
+scene.add(new T.HemisphereLight(0xffffff,0x7d8a90,0.95));
+const sun=new T.DirectionalLight(0xffffff,0.7);sun.position.set(1.5,3,2);scene.add(sun);
+
+const std=(c,o={})=>new T.MeshStandardMaterial(Object.assign({color:c,roughness:.55,metalness:.05},o));
+const glassMat=()=>new T.MeshPhysicalMaterial({color:0xe8f4ff,transparent:true,opacity:.24,roughness:.05,clearcoat:1,side:T.DoubleSide,depthWrite:false});
+const liqMat=(c,op=.72)=>new T.MeshStandardMaterial({color:c,transparent:true,opacity:op,roughness:.25,depthWrite:false});
+function rot(o,a,v){o.rotation[a]=v;return o}
+function mesh(g,m,x=0,y=0,z=0){const o=new T.Mesh(g,m);o.position.set(x,y,z);return o}
+function glass(g,x,y,z){const o=mesh(g,glassMat(),x,y,z);o.renderOrder=3;return o}
+function liq(g,c,x,y,z,op){const o=mesh(g,liqMat(c,op),x,y,z);o.renderOrder=1;return o}
+const lathe=(pts,seg=32)=>new T.LatheGeometry(pts.map(p=>new T.Vector2(p[0],p[1])),seg);
+function capsuleGeo(r,L,seg=12){const p=[];for(let i=0;i<=seg;i++){const a=-PI/2+i/seg*PI/2;p.push([Math.max(1e-4,r*Math.cos(a)),-L/2+r*Math.sin(a)])}for(let i=0;i<=seg;i++){const a=i/seg*PI/2;p.push([Math.max(1e-4,r*Math.cos(a)),L/2+r*Math.sin(a)])}const g=lathe(p,20);g.rotateZ(PI/2);return g}
+function canvasTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');draw(g,w,h);const t=new T.CanvasTexture(c);t.anisotropy=4;return {c,g,t}}
+function rrp(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+function wrap(g,text,x,y,maxW,lh){const words=text.split(' ');let line='';for(const w of words){const t=line?line+' '+w:w;if(g.measureText(t).width>maxW&&line){g.fillText(line,x,y);y+=lh;line=w}else line=t}if(line){g.fillText(line,x,y);y+=lh}return y}
+
+/* ============ ROOM ============ */
+const room=new T.Group();scene.add(room);
+{
+  const fl=canvasTex(256,256,(g,w)=>{g.fillStyle='#bcc6c3';g.fillRect(0,0,w,w);g.strokeStyle='#aab5b2';g.lineWidth=3;g.strokeRect(0,0,w,w)});
+  fl.t.wrapS=fl.t.wrapT=T.RepeatWrapping;fl.t.repeat.set(14,14);
+  const floor=mesh(new T.PlaneGeometry(14,14),std(0xffffff,{map:fl.t,roughness:.9}));floor.rotation.x=-PI/2;room.add(floor);
+  const wallM=std(0xe8edeb,{roughness:.95});
+  room.add(mesh(new T.PlaneGeometry(7,3.2),wallM,0,1.6,-2.4));
+  const wl=mesh(new T.PlaneGeometry(6,3.2),wallM,-3.5,1.6,.6);wl.rotation.y=PI/2;room.add(wl);
+  const wr=mesh(new T.PlaneGeometry(6,3.2),wallM,3.5,1.6,.6);wr.rotation.y=-PI/2;room.add(wr);
+  room.add(mesh(new T.PlaneGeometry(1.5,1.05),new T.MeshBasicMaterial({color:0xcfe8f6}),1.35,1.75,-2.39));
+  room.add(mesh(new T.BoxGeometry(1.56,.05,.08),std(0xf4f6f5),1.35,1.2,-2.36));
+  const cab=mesh(new T.BoxGeometry(1.3,.9,.5),std(0x5f7670),-1.9,.45,-2.12);room.add(cab);
+  [[0x2766c4,.08],[0xc9a24a,.1],[0x6f9a5a,.07],[0x9a4a3a,.09]].forEach((b,i)=>{room.add(mesh(new T.CylinderGeometry(.045,.045,b[1]*2,16),liqMat(b[0],.8),-2.35+i*.28,.9+b[1],-2.1))});
+  const poster=canvasTex(600,820,(g,w,h)=>{g.fillStyle='#fbfcfb';g.fillRect(0,0,w,h);g.fillStyle='#1f5fbf';g.fillRect(0,0,w,120);g.fillStyle='#fff';g.font=`800 40px ${F}`;g.fillText('Mikroskop bilan',36,58);g.fillText('ishlash qoidalari',36,102);
+    g.fillStyle='#13232a';g.font=`600 27px ${F}`;let y=175;['1. Avval 10× obyektivda qarang.','2. Makrovint bilan tasvirni toping.','3. Mikrovint bilan aniqlang.','4. Yorug‘likni diafragma bilan sozlang.','5. 100× uchun immersion moyi tomizing.','6. Ishdan keyin linzalarni arting.'].forEach(t=>{y=wrap(g,t,36,y,530,40)+16});
+    g.fillStyle='#566a70';g.font=`500 20px ${FM}`;g.fillText('B. subtilis: 2–3 × 0,7–0,8 mkm',36,h-40)});
+  room.add(mesh(new T.PlaneGeometry(.6,.82),new T.MeshBasicMaterial({map:poster.t}),-.75,1.78,-2.39));
+  room.add(rot(mesh(new T.PlaneGeometry(1.6,.5),new T.MeshBasicMaterial({color:0xffffff}),0,3.19,-.6),'x',PI/2));
+}
+
+/* ============ LAB (rebuildable) ============ */
+let O={}, labG=null;
+const DYE={mb:0x2766c4,ink:0x5b4a8f};
+function buildLab(){
+  if(labG){scene.remove(labG)}
+  labG=new T.Group();scene.add(labG);O={};
+  // bench
+  labG.add(mesh(new T.BoxGeometry(1.72,.04,.74),std(0x34434a,{roughness:.4}),0,B-.02,-.6));
+  labG.add(mesh(new T.BoxGeometry(1.66,B-.04,.68),std(0xe2e7e5),0,(B-.04)/2,-.6));
+  const add=(k,g)=>{g.userData.key=k;labG.add(g);O[k]=g;return g};
+
+  // jug (suv)
+  const jug=add('jug',new T.Group());jug.position.set(-.74,B,-.72);
+  jug.add(glass(new T.CylinderGeometry(.032,.032,.11,24,1,true),0,.055,0));jug.add(rot(glass(new T.CircleGeometry(.032,24),0,.001,0),'x',-PI/2));
+  const jl=new T.CylinderGeometry(.03,.03,.085,24);jl.translate(0,.0425,0);O.jugLiq=liq(jl,0x9fd0ee,0,.002,0,.6);jug.add(O.jugLiq);
+
+  // hay pile
+  const hay=add('hay',new T.Group());hay.position.set(-.74,B,-.46);O.sticks=[];
+  for(let i=0;i<9;i++){const s=mesh(new T.CylinderGeometry(.0022,.0022,.04+R()*.025,6),std(0xc99a2e,{roughness:.9}),(R()-.5)*.06,.004+R()*.008,(R()-.5)*.06);s.rotation.set(PI/2+(R()-.5)*.4,0,R()*PI);hay.add(s);O.sticks.push(s)}
+
+  // stand (tripod + gauze)
+  const st=new T.Group();st.position.set(-.55,B,-.66);labG.add(st);
+  const ring=mesh(new T.TorusGeometry(.065,.004,8,32),std(0x8a969a,{metalness:.7,roughness:.35}),0,.14,0);ring.rotation.x=PI/2;st.add(ring);
+  for(let i=0;i<3;i++){const a=i/3*PI*2;const l=mesh(new T.CylinderGeometry(.004,.004,.145,6),std(0x8a969a,{metalness:.7}),Math.cos(a)*.07,.07,Math.sin(a)*.07);st.add(l)}
+  st.add(mesh(new T.BoxGeometry(.14,.002,.14),std(0x9aa3a6,{metalness:.5,roughness:.6,transparent:true,opacity:.85}),0,.142,0));
+
+  // flask
+  const flask=add('flask',new T.Group());flask.position.set(-.55,B+.143,-.66);
+  flask.add(glass(lathe([[1e-4,0],[.062,0],[.066,.006],[.068,.014],[.022,.108],[.02,.115],[.02,.158],[.024,.162],[.024,.166]])));
+  O.fLiq=liq(lathe([[1e-4,.003],[.062,.003],[.064,.012],[.04,.06],[1e-4,.06]]),0x9fd0ee,0,0,0,.65);O.fLiq.scale.y=.001;O.fLiq.visible=false;flask.add(O.fLiq);
+  O.bubbles=[];for(let i=0;i<14;i++){const b=mesh(new T.SphereGeometry(.0028,8,6),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.75}),(R()-.5)*.07,.006+R()*.04,(R()-.5)*.07);b.visible=false;flask.add(b);O.bubbles.push(b)}
+  O.steam=[];for(let i=0;i<6;i++){const s=mesh(new T.SphereGeometry(.014,10,8),new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false}),0,.17+i*.03,0);flask.add(s);O.steam.push(s)}
+
+  // cotton
+  const cot=add('cotton',new T.Group());cot.position.set(-.36,B+.016,-.76);
+  cot.add(mesh(new T.IcosahedronGeometry(.02,1),std(0xf7f5ef,{roughness:1,flatShading:true})));
+
+  // spirt lamp
+  const lamp=add('lamp',new T.Group());lamp.position.set(-.42,B,-.44);
+  lamp.add(glass(new T.CylinderGeometry(.03,.034,.05,24),0,.025,0));
+  lamp.add(liq(new T.CylinderGeometry(.027,.031,.03,24),0xbfe6f0,0,.016,0,.45));
+  lamp.add(mesh(new T.CylinderGeometry(.011,.011,.012,16),std(0x8a969a,{metalness:.7}),0,.056,0));
+  lamp.add(mesh(new T.CylinderGeometry(.0025,.0025,.012,8),std(0xf2efe6),0,.066,0));
+  O.flame=new T.Group();O.flame.position.y=.072;
+  const fo=mesh(new T.ConeGeometry(.009,.04,16),new T.MeshBasicMaterial({color:0xf2a33a,transparent:true,opacity:.85,depthWrite:false}),0,.02,0);
+  const fi=mesh(new T.ConeGeometry(.0045,.018,12),new T.MeshBasicMaterial({color:0x5a9bf0,transparent:true,opacity:.9,depthWrite:false}),0,.009,0);
+  O.flame.add(fo,fi);O.flame.scale.setScalar(.001);O.flame.visible=false;lamp.add(O.flame);
+  O.fLight=new T.PointLight(0xffa040,0,.6);O.fLight.position.y=.1;lamp.add(O.fLight);
+
+  // funnel stand + funnel + beaker
+  const fst=new T.Group();fst.position.set(-.2,B,-.66);labG.add(fst);
+  fst.add(mesh(new T.BoxGeometry(.12,.01,.1),std(0x2c3236),-.07,.005,-.02));
+  fst.add(mesh(new T.CylinderGeometry(.005,.005,.34,8),std(0x8a969a,{metalness:.7}),-.11,.17,-.04));
+  fst.add(rot(mesh(new T.CylinderGeometry(.003,.003,.08,6),std(0x8a969a,{metalness:.7}),-.07,.2,-.02),'z',PI/2));
+  const fr=mesh(new T.TorusGeometry(.033,.003,8,24),std(0x8a969a,{metalness:.7}),0,.2,0);fr.rotation.x=PI/2;fst.add(fr);
+  const fun=add('funnel',new T.Group());fun.position.set(-.2,B+.12,-.66);
+  fun.add(glass(lathe([[.006,0],[.006,.05],[.055,.11],[.058,.112]])));
+  fun.add(mesh(lathe([[.004,.056],[.05,.106]]),std(0xfaf8f2,{side:T.DoubleSide,roughness:1})));
+  O.funLiq=liq(lathe([[1e-4,.064],[.04,.1],[1e-4,.1]]),0xc9a24a,0,0,0,.8);O.funLiq.visible=false;fun.add(O.funLiq);
+  O.drip=mesh(new T.SphereGeometry(.003,8,6),liqMat(0xc9a24a,.9),0,-.005,0);O.drip.visible=false;fun.add(O.drip);
+  const bk=add('beaker',new T.Group());bk.position.set(-.2,B,-.66);
+  bk.add(glass(new T.CylinderGeometry(.04,.04,.1,28,1,true),0,.05,0));bk.add(rot(glass(new T.CircleGeometry(.04,28),0,.001,0),'x',-PI/2));
+  const bl=new T.CylinderGeometry(.037,.037,.07,28);bl.translate(0,.035,0);O.bLiq=liq(bl,0xc9a24a,0,.003,0,.78);O.bLiq.scale.y=.001;O.bLiq.visible=false;bk.add(O.bLiq);
+  const film=canvasTex(256,256,(g,w)=>{g.clearRect(0,0,w,w);for(let i=0;i<900;i++){const a=R()*PI*2,r=Math.sqrt(R())*120;g.fillStyle=`rgba(${230+R()*20|0},${226+R()*20|0},${208+R()*20|0},${.35+R()*.5})`;g.beginPath();g.arc(128+Math.cos(a)*r,128+Math.sin(a)*r,3+R()*7,0,PI*2);g.fill()}});
+  O.film=mesh(new T.CircleGeometry(.037,32),new T.MeshStandardMaterial({map:film.t,transparent:true,opacity:0,roughness:1,depthWrite:false}),0,.0745,0);O.film.rotation.x=-PI/2;O.film.renderOrder=2;bk.add(O.film);
+
+  // incubator
+  const inc=add('incubator',new T.Group());inc.position.set(.1,B,-.74);
+  const wm=std(0xe9edeb,{roughness:.5});
+  inc.add(mesh(new T.BoxGeometry(.26,.01,.24),wm,0,.005,0),mesh(new T.BoxGeometry(.26,.012,.24),wm,0,.334,0),mesh(new T.BoxGeometry(.01,.34,.24),wm,-.125,.17,0),mesh(new T.BoxGeometry(.01,.34,.24),wm,.125,.17,0),mesh(new T.BoxGeometry(.26,.34,.01),wm,0,.17,-.115));
+  inc.add(mesh(new T.BoxGeometry(.26,.05,.012),std(0xd5dbd9),0,.315,.115));
+  O.heat=mesh(new T.PlaneGeometry(.2,.02),new T.MeshBasicMaterial({color:0x552211}),0,.27,-.108);inc.add(O.heat);
+  O.door=new T.Group();O.door.position.set(-.13,.155,.122);inc.add(O.door);
+  const dg=glass(new T.BoxGeometry(.26,.28,.006),.13,0,0);dg.material.opacity=.32;O.door.add(dg);
+  O.door.add(mesh(new T.BoxGeometry(.008,.08,.012),std(0x8a969a,{metalness:.7}),.24,0,.012));
+  O.disp=canvasTex(320,64,()=>{});O.dispM=mesh(new T.PlaneGeometry(.2,.04),new T.MeshBasicMaterial({map:O.disp.t}),0,.315,.122);inc.add(O.dispM);
+  O.incLight=new T.PointLight(0xffb070,0,.4);O.incLight.position.set(0,.2,0);inc.add(O.incLight);
+
+  // pipette + rack
+  labG.add(mesh(new T.BoxGeometry(.04,.025,.03),std(0x2c3236),.32,B+.0125,-.42));
+  const pip=add('pipette',new T.Group());pip.position.set(.32,B+.006,-.42);
+  pip.add(glass(new T.CylinderGeometry(.0035,.0025,.13,12),0,.065,0));
+  const bulb=mesh(new T.SphereGeometry(.008,14,10),std(0x7a2a22,{roughness:.6}),0,.14,0);bulb.scale.y=1.5;pip.add(bulb);
+  O.sample=mesh(new T.CylinderGeometry(.0022,.002,.016,8),std(0xe9e6da),0,.012,0);O.sample.visible=false;pip.add(O.sample);
+
+  // slide + drop
+  const sl=add('slide',new T.Group());sl.position.set(.42,B,-.52);
+  const sg=glass(new T.BoxGeometry(.076,.0012,.026),0,.0006,0);sg.material.opacity=.5;sl.add(sg);
+  sl.add(mesh(new T.BoxGeometry(.02,.0013,.026),std(0xf2f4f3,{transparent:true,opacity:.85}),-.028,.0007,0));
+  O.drop=mesh(new T.SphereGeometry(.006,18,10),liqMat(0xd8e6dc,.85),0,.0013,0);O.drop.scale.set(1,.45,1);O.drop.visible=false;sl.add(O.drop);
+  // coverslip
+  const cv=add('cover',new T.Group());cv.position.set(.5,B,-.42);
+  const cg=glass(new T.BoxGeometry(.022,.0007,.022),0,.0004,0);cg.material.opacity=.45;cv.add(cg);
+  // dye bottle
+  const dy=add('dye',new T.Group());dy.position.set(.54,B,-.6);
+  O.dyeBody=mesh(new T.CylinderGeometry(.016,.017,.055,20),liqMat(DYE.mb,.85),0,.0275,0);dy.add(O.dyeBody);
+  dy.add(mesh(new T.CylinderGeometry(.007,.009,.02,12),std(0x1b1f22),0,.065,0));
+  const db=mesh(new T.SphereGeometry(.008,12,10),std(0x2a2a2a,{roughness:.7}),0,.083,0);db.scale.y=1.3;dy.add(db);
+  O.dyeLbl=canvasTex(128,48,()=>{});const lb=mesh(new T.CylinderGeometry(.0172,.0172,.022,20,1,true,-PI/2,PI),new T.MeshBasicMaterial({map:O.dyeLbl.t,side:T.DoubleSide}),0,.028,0);dy.add(lb);
+  O.dyeDrop=mesh(new T.SphereGeometry(.0028,10,8),liqMat(DYE.mb,.95),0,0,0);O.dyeDrop.visible=false;labG.add(O.dyeDrop);
+
+  // microscope
+  const mic=add('mic',new T.Group());mic.position.set(.66,B,-.72);mic.rotation.y=Math.atan2(-.66,.72);
+  const mb=std(0xe8ebec,{roughness:.35}),md=std(0x23292d,{roughness:.4,metalness:.3}),ms=std(0xb8c0c4,{metalness:.85,roughness:.25});
+  mic.add(mesh(new T.BoxGeometry(.12,.022,.16),mb,0,.011,0));
+  mic.add(mesh(new T.BoxGeometry(.034,.2,.036),mb,0,.12,-.06));
+  mic.add(mesh(new T.BoxGeometry(.034,.05,.08),mb,0,.24,-.035));
+  const tube=mesh(new T.CylinderGeometry(.014,.014,.14,20),mb,0,.25,.03);tube.rotation.x=.4;mic.add(tube);
+  const eye=mesh(new T.CylinderGeometry(.012,.012,.04,20),md,0,.351,.073);eye.rotation.x=.4;mic.add(eye);
+  const rev=mesh(new T.CylinderGeometry(.028,.022,.018,24),ms,0,.188,.012);rev.rotation.x=.4;mic.add(rev);
+  [[0,0],[.016,.008],[-.016,.008]].forEach(([dx,dz])=>{const ob=mesh(new T.CylinderGeometry(.0065,.005,.032,12),ms,dx,.165,.008+dz);mic.add(ob)});
+  mic.add(mesh(new T.BoxGeometry(.1,.008,.1),md,0,.12,.01));
+  mic.add(mesh(new T.BoxGeometry(.03,.003,.006),ms,-.025,.1255,-.012),mesh(new T.BoxGeometry(.03,.003,.006),ms,.025,.1255,-.012));
+  O.micLight=mesh(new T.CylinderGeometry(.015,.015,.012,20),new T.MeshStandardMaterial({color:0x333333,emissive:0x000000}),0,.07,.01);mic.add(O.micLight);
+  [-1,1].forEach(s=>{const k=mesh(new T.CylinderGeometry(.022,.022,.012,24),md,s*.03,.13,-.06);k.rotation.z=PI/2;mic.add(k);const k2=mesh(new T.CylinderGeometry(.012,.012,.01,20),ms,s*.041,.13,-.06);k2.rotation.z=PI/2;mic.add(k2)});
+
+  // highlight arrow
+  O.arrow=mesh(new T.ConeGeometry(.016,.045,20),new T.MeshBasicMaterial({color:0x22c27a}),0,0,0);O.arrow.rotation.x=PI;labG.add(O.arrow);
+  drawDisp();drawDyeLbl();
+}
+function drawDisp(day){const {g,t}=O.disp;g.fillStyle='#0d1316';g.fillRect(0,0,320,64);g.fillStyle='#7ef0b0';g.font=`600 30px ${FM}`;g.fillText(`${S.temp} °C`,18,43);g.fillStyle='#e8c25a';g.fillText(day==null?'-- kun':`${day}-kun`,170,43);t.needsUpdate=true}
+function drawDyeLbl(){const {g,t}=O.dyeLbl;g.fillStyle='#fff';g.fillRect(0,0,128,48);g.fillStyle='#13232a';g.font=`700 17px ${F}`;g.textAlign='center';g.fillText(S.dye==='ink'?'SIYOH':'METILEN',64,22);g.fillText(S.dye==='ink'?'':'KO‘KI',64,42);g.textAlign='left';t.needsUpdate=true;
+  O.dyeBody.material.color.setHex(DYE[S.dye]);O.dyeDrop.material.color.setHex(DYE[S.dye])}
+
+/* ============ STATE / STEPS ============ */
+const S={temp:25,days:3,dye:'mb',growth:0,ai:0,busy:false,mode:'lab',info:false,msg:'Yashil strelka ko‘rsatgan suv idishiga bosing yoki pastdagi yashil tugmani tanlang.',mc:'',demo:false,stage:0};
+const STEPS=[
+ {t:'Kolbaga pichan va suv solish',ins:'Kolbaga suv bilan birga bir necha pichan bo‘laklaridan soling va kolbaning og‘zini paxta bilan berkiting.',why:'Quruq pichan yuzasida doimo pichan tayoqchasining sporalari bo‘ladi. Paxta tiqin havoni o‘tkazadi, lekin chang va begona mikroblarni ushlab qoladi.'},
+ {t:'Aralashmani qaynatish',ins:'Kolbadagi aralashmani 15 daqiqa davomida qaynating.',why:'100 °C da ko‘pchilik mikroblarning vegetativ hujayralari nobud bo‘ladi. Pichan tayoqchasining issiqqa chidamli sporalari tirik qoladi, shu tufayli u tanlab ajratiladi.'},
+ {t:'Filtrlash va termostatda saqlash',ins:'Qaynatilgan aralashmani filtrlab, 20–25 °C haroratda bir necha kun saqlang.',why:'Filtr pichan qoldiqlarini ushlab qoladi. Qulay haroratda sporalar o‘sib chiqadi va bakteriyalar ko‘payadi. Harorat va muddatni o‘zingiz tanlang.'},
+ {t:'Pardadan namuna olish',ins:'Aralashma sirtidagi yupqa pardadan shisha naycha yordamida bir bo‘lagini olib, buyum oynasiga joylashtiring.',why:'Pichan tayoqchasi aerob: kislorod kerak. Shuning uchun u suyuqlik sirtida kulrang-oq parda (biofilm) hosil qiladi.'},
+ {t:'Qoplagich oyna va bo‘yoq',ins:'Tomchini qoplagich oyna bilan yoping va uning ostiga suyultirilgan siyoh yoki metilen ko‘ki tomizing.',why:'Bo‘yoq oyna chetidan kapillyar kuch bilan so‘riladi. Metilen ko‘ki sitoplazmani bo‘yaydi, spora qobig‘i bo‘yoqni o‘tkazmaydi va yaltirab ko‘rinadi.'},
+ {t:'Mikroskopda kuzatish',ins:'Havorang fonda harakatchan bakteriyalar bilan birga yaltiroq ovalsimon tanachalar, ya’ni sporalar ham ko‘rinadi.',why:'Preparatni mikroskop stoliga qo‘ying, so‘ng okulyarga qarang. Siz preparat ichiga kirasiz: 1 mkm taxminan 6 sm bo‘lib ko‘rinadi.'}
+];
+const ACTS=[
+ {id:'water',s:0,k:['jug','flask'],l:'Kolbaga suv quyish'},
+ {id:'hay',s:0,k:['hay','flask'],l:'Pichan bo‘laklarini solish'},
+ {id:'cotton',s:0,k:['cotton','flask'],l:'Og‘zini paxta bilan berkitish'},
+ {id:'lamp',s:1,k:['lamp'],l:'Spirt lampani yoqish'},
+ {id:'boil',s:1,k:['flask','lamp'],l:'15 daqiqa qaynatish'},
+ {id:'filter',s:2,k:['funnel','flask','beaker'],l:'Voronka orqali filtrlash'},
+ {id:'incubate',s:2,k:['incubator','beaker'],l:'Termostatga qo‘yish'},
+ {id:'take',s:3,k:['pipette','beaker'],l:'Shisha naycha bilan parda olish'},
+ {id:'place',s:3,k:['slide','pipette'],l:'Buyum oynasiga tomizish'},
+ {id:'cover',s:4,k:['cover','slide'],l:'Qoplagich oyna bilan yopish'},
+ {id:'dye',s:4,k:['dye','slide'],l:'Oyna chetiga bo‘yoq tomizish'},
+ {id:'stage',s:5,k:['mic','slide'],l:'Preparatni mikroskop stoliga qo‘yish'},
+ {id:'look',s:5,k:['mic'],l:'Okulyarga qarash'}
+];
+function growthCalc(){const t=S.temp;let tf=t>=20&&t<=25?1:(t>=16&&t<20)||(t>25&&t<=35)?.65:t>35&&t<=40?.45:t<16?.15:.1;return {g:tf*Math.min(1,S.days/3),tf,df:Math.min(1,S.days/3)}}
+
+/* ============ TWEENS ============ */
+const tws=[];const ease=p=>p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+const tw=(d,fn)=>new Promise(res=>tws.push({t:0,d,fn,res}));
+function runTw(dt){for(let i=tws.length-1;i>=0;i--){const w=tws[i];w.t+=dt;const p=Math.min(1,w.t/w.d);w.fn(ease(p),p);if(p>=1){tws.splice(i,1);w.res()}}}
+async function moveTo(o,to,d=.9,arc=0,rot=null){const f=o.position.clone(),r0=o.rotation.clone();await tw(d,p=>{o.position.lerpVectors(f,to,p);o.position.y+=Math.sin(p*PI)*arc;if(rot)o.rotation.set(r0.x+(rot.x-r0.x)*p,r0.y+(rot.y-r0.y)*p,r0.z+(rot.z-r0.z)*p)})}
+const wait=s=>tw(s,()=>{});
+function setLiq(m,v){m.visible=v>.005;m.scale.y=Math.max(.001,v)}
+
+/* ============ ACTIONS ============ */
+let boilT=-1;
+async function doAct(){
+  if(S.busy||S.mode!=='lab')return; const a=ACTS[S.ai]; S.busy=true; S.msg='Bajarilmoqda…';S.mc='';drawPanel();
+  const RZ=V(0,0,0);
+  try{
+  if(a.id==='water'){const j=O.jug,home=j.position.clone();await moveTo(j,V(-.446,B+.375,-.66),1,.05,V(0,0,1.9));
+    await tw(1.4,p=>{setLiq(O.fLiq,.85*p);O.jugLiq.scale.y=Math.max(.15,1-p*.85)});await moveTo(j,home,1,.05,RZ);
+    say('Kolbaga suv quyildi. Endi pichan bo‘laklarini soling.')}
+  if(a.id==='hay'){const ps=O.sticks.map(s=>{O.flask.attach(s);const to=V((R()-.5)*.07,.008+R()*.035,(R()-.5)*.07);return moveTo(s,to,1.1+R()*.4,.22,V(R()*PI,R()*PI,R()*PI))});await Promise.all(ps);
+    say('Pichan bo‘laklari kolbaga solindi. Kolba og‘zini paxta bilan berkiting.')}
+  if(a.id==='cotton'){O.flask.attach(O.cotton);await moveTo(O.cotton,V(0,.17,0),1.1,.15);await tw(.4,p=>O.cotton.scale.set(1,1+.25*p,1));say('Kolba paxta tiqin bilan berkitildi. 1-bosqich tugadi.','good')}
+  if(a.id==='lamp'){await moveTo(O.lamp,V(-.55,B,-.66),1.1,.08);O.flame.visible=true;await tw(.5,p=>{O.flame.scale.setScalar(Math.max(.001,p));O.fLight.intensity=p*1.2});say('Spirt lampa yoqildi, kolba sim to‘r ustida. Qaynatishni boshlang.')}
+  if(a.id==='boil'){boilT=0;O.bubbles.forEach(b=>b.visible=true);const c0=new T.Color(0x9fd0ee),c1=new T.Color(0xc9a24a);
+    await tw(9,(p,lin)=>{O.fLiq.material.color.copy(c0).lerp(c1,lin);boilT=lin});boilT=-1;O.bubbles.forEach(b=>b.visible=false);O.steam.forEach(s=>s.material.opacity=0);
+    await tw(.5,p=>{O.flame.scale.setScalar(Math.max(.001,1-p));O.fLight.intensity=1.2*(1-p)});O.flame.visible=false;
+    say('15 daqiqa qaynatildi, lampa o‘chirildi. Begona mikroblar nobud bo‘ldi, sporalar saqlanib qoldi.','good')}
+  if(a.id==='filter'){labG.attach(O.cotton);await moveTo(O.cotton,V(-.4,B+.016,-.78),.8,.1);
+    const f=O.flask,home=f.position.clone();await moveTo(f,V(-.05,B+.32,-.66),1.2,.06,V(0,0,2.0));
+    await tw(1.3,p=>{setLiq(O.fLiq,.85*(1-p));setLiq(O.funLiq,Math.min(1,p*1.6))});
+    O.drip.visible=true;await tw(2.6,(p,lin)=>{setLiq(O.bLiq,lin);O.funLiq.scale.setScalar(Math.max(.001,1-lin));O.drip.position.y=-.005-((lin*9)%1)*.09});O.drip.visible=false;O.funLiq.visible=false;
+    await moveTo(f,home,1.1,.06,RZ);say('Ivitma filtrlandi. Termostat haroratini va muddatini tanlab, "Termostatga qo‘yish"ni bosing.')}
+  if(a.id==='incubate'||a.id==='reinc'){await incubate()}
+  if(a.id==='take'){const p=O.pipette,home=p.position.clone();await moveTo(p,V(.2,B+.2,-.45),1,.08);await moveTo(p,V(.2,B+.068,-.45),.7);O.sample.visible=true;await wait(.3);await moveTo(p,V(.2,B+.2,-.45),.6);
+    S.home=home;say(S.growth<.35?'Parda juda yupqa, naychaga kam namuna olindi.':'Naychaga parda bo‘lagi olindi. Endi buyum oynasiga tomizing.',S.growth<.35?'warn':'')}
+  if(a.id==='place'){const p=O.pipette;await moveTo(p,V(.42,B+.06,-.52),1,.03);await moveTo(p,V(.42,B+.012,-.52),.5);O.sample.visible=false;O.drop.visible=true;await tw(.5,q=>O.drop.scale.set(q,.45*q,q));
+    await moveTo(p,V(.42,B+.12,-.52),.5);await moveTo(p,S.home||V(.32,B+.006,-.42),.9);say('Namuna buyum oynasi o‘rtasiga tomizildi. Qoplagich oyna bilan yoping.')}
+  if(a.id==='cover'){const c=O.cover;await moveTo(c,V(.42,B+.03,-.52),1,.08,V(0,0,.5));await moveTo(c,V(.42,B+.0028,-.52),.7,0,V(0,0,0));await tw(.5,p=>O.drop.scale.set(1+.4*p,.45-.28*p,1+.4*p));O.slide.attach(c);
+    say('Qoplagich oyna 45° burchakda asta tushirildi, havo pufaklari qolmadi. Endi bo‘yoq tanlang va tomizing.')}
+  if(a.id==='dye'){drawDyeLbl();const d=O.dye,home=d.position.clone();await moveTo(d,V(.506,B+.083,-.52),1.1,.06,V(0,0,2.2));
+    O.dyeDrop.position.set(.433,B+.03,-.52);O.dyeDrop.visible=true;await tw(.6,p=>O.dyeDrop.position.y=B+.03-.026*p);O.dyeDrop.visible=false;
+    const c0=O.drop.material.color.clone(),c1=new T.Color(DYE[S.dye]);await tw(1.4,p=>{O.drop.material.color.copy(c0).lerp(c1,p);O.drop.material.opacity=.85});
+    await moveTo(d,home,1,.06,V(0,0,0));say(S.dye==='mb'?'Metilen ko‘ki qoplagich oyna ostiga so‘rildi, ortiqchasi filtr qog‘oz bilan olindi.':'Siyoh qoplagich oyna ostiga so‘rildi.','good')}
+  if(a.id==='stage'){const sp=O.mic.localToWorld(V(0,.1245,.01));labG.worldToLocal(sp);await moveTo(O.slide,sp,1.4,.12,V(0,O.mic.rotation.y,0));O.micLight.material.emissive.setHex(0xfff2c8);
+    say('Preparat mikroskop stoliga qo‘yildi va qisqichlar bilan mahkamlandi. Endi okulyarga qarang.','good')}
+  if(a.id==='look'){S.busy=false;await enterMicro();return}
+  if(a.id!=='reinc') S.ai=Math.min(ACTS.length-1,S.ai+1);
+  }finally{S.busy=false;drawPanel()}
+}
+async function incubate(){
+  const bk=O.beaker,inside=V(.1,B+.01,-.74);
+  await tw(.8,p=>O.door.rotation.y=-1.7*p);
+  await moveTo(bk,inside,1.4,.18);await tw(.8,p=>O.door.rotation.y=-1.7*(1-p));
+  const {g,tf,df}=growthCalc();O.incLight.intensity=.8;O.heat.material.color.setHex(0xd2552a);
+  for(let d=1;d<=S.days;d++){drawDisp(d);const f0=O.film.material.opacity,f1=g*.95*d/S.days;await tw(.55,p=>O.film.material.opacity=f0+(f1-f0)*p)}
+  O.incLight.intensity=0;O.heat.material.color.setHex(0x552211);S.growth=g;
+  await tw(.8,p=>O.door.rotation.y=-1.7*p);await moveTo(bk,V(.2,B,-.45),1.4,.18);await tw(.8,p=>O.door.rotation.y=-1.7*(1-p));
+  if(g>=.8) say(`${S.days} kun, ${S.temp} °C: ivitma sirtida qalin kulrang-oq parda hosil bo‘ldi.`,'good');
+  else if(tf<1&&df<1) say(`Parda juda yupqa: ${S.temp} °C qulay emas, muddat ham kam. 20–25 °C va kamida 3 kun tanlab, "Qayta saqlash"ni bosing.`,'bad');
+  else if(tf<1) say(`Parda yupqa: ${S.temp} °C darslikdagi 20–25 °C dan tashqarida. "Qayta saqlash" mumkin.`,'warn');
+  else say(`Harorat to‘g‘ri, lekin ${S.days} kun kam. Kamida 3 kun saqlang yoki shunday davom eting.`,'warn');
+}
+function say(t,c=''){S.msg=t;S.mc=c;drawPanel()}
+
+/* ============ PANEL (3D UI) ============ */
+const PW=1024,PH=704;const P=canvasTex(PW,PH,()=>{});const pg=P.g;
+const panel=new T.Mesh(new T.PlaneGeometry(1.0,PH/PW),new T.MeshBasicMaterial({map:P.t,transparent:true,depthWrite:false}));panel.renderOrder=10;scene.add(panel);
+let btns=[],hoverId=null;
+function btn(id,x,y,w,h,label,fn,o={}){btns.push({id,x,y,w,h,fn,dis:o.dis});const hov=hoverId===id&&!o.dis;
+  pg.fillStyle=o.dis?'#1c2a30':o.primary?(hov?'#a6f8cb':'#7ef0b0'):o.on?'#e8c25a':(hov?'#38505a':'#22343c');rrp(pg,x,y,w,h,14);pg.fill();
+  pg.fillStyle=o.dis?'#5e6f75':(o.primary||o.on)?'#0b1a12':'#e4eef0';pg.font=`700 ${o.fs||(h>=76?30:24)}px ${F}`;pg.textAlign='center';pg.textBaseline='middle';pg.fillText(label,x+w/2,y+h/2+1);pg.textAlign='left';pg.textBaseline='alphabetic'}
+function head(left,right,prog){pg.clearRect(0,0,PW,PH);pg.fillStyle='rgba(11,19,23,.94)';rrp(pg,0,0,PW,PH,26);pg.fill();pg.strokeStyle='#2b3a40';pg.lineWidth=3;pg.stroke();
+  pg.font=`600 20px ${FM}`;pg.fillStyle='#8fa4aa';pg.fillText(left,40,52);pg.textAlign='right';pg.fillText(right,PW-40,52);pg.textAlign='left';
+  pg.fillStyle='#22343c';pg.fillRect(40,70,PW-80,6);pg.fillStyle='#7ef0b0';pg.fillRect(40,70,(PW-80)*prog,6)}
+const MSGC={'':'#9fd3ff',good:'#7ef0b0',warn:'#e8c25a',bad:'#ff9a84'};
+function drawPanel(){
+  btns=[];
+  if(S.info){drawInfo()}
+  else if(S.mode==='lab'){
+    const a=ACTS[S.ai],st=STEPS[a.s];
+    head('PICHAN TAYOQCHASI · 3D LABORATORIYA',`BOSQICH ${a.s+1} / 6`,S.ai/ACTS.length);
+    pg.fillStyle='#e4eef0';pg.font=`800 42px 'Bricolage Grotesque',${F}`;pg.fillText(st.t,40,130);
+    pg.font=`400 27px ${F}`;pg.fillStyle='#e4eef0';let y=wrap(pg,st.ins,40,176,PW-80,36);
+    pg.font=`600 22px ${F}`;pg.fillStyle='#e8c25a';pg.fillText('Nima uchun?',40,y+14);pg.font=`400 22px ${F}`;pg.fillStyle='#a9bcc1';y=wrap(pg,st.why,40,y+44,PW-80,29);
+    const ey=476;
+    if(a.id==='incubate'||(a.id==='take'&&S.growth<.8)){
+      const dis=S.busy;pg.font=`600 22px ${FM}`;pg.fillStyle='#8fa4aa';pg.fillText('HARORAT',40,ey+34);pg.fillText('MUDDAT',520,ey+34);
+      btn('t-',170,ey,56,56,'−',()=>{S.temp=Math.max(10,S.temp-1);drawDisp();drawPanel()},{dis});pg.font=`600 30px ${FM}`;pg.fillStyle='#7ef0b0';pg.textAlign='center';pg.fillText(S.temp+' °C',300,ey+38);pg.textAlign='left';
+      btn('t+',374,ey,56,56,'+',()=>{S.temp=Math.min(45,S.temp+1);drawDisp();drawPanel()},{dis});
+      btn('d-',640,ey,56,56,'−',()=>{S.days=Math.max(1,S.days-1);drawPanel()},{dis});pg.font=`600 30px ${FM}`;pg.fillStyle='#7ef0b0';pg.textAlign='center';pg.fillText(S.days+' kun',770,ey+38);pg.textAlign='left';
+      btn('d+',844,ey,56,56,'+',()=>{S.days=Math.min(7,S.days+1);drawPanel()},{dis});
+    } else if(a.id==='dye'){
+      pg.font=`600 22px ${FM}`;pg.fillStyle='#8fa4aa';pg.fillText('BO‘YOQ',40,ey+34);
+      btn('mb',170,ey,300,56,'Metilen ko‘ki',()=>{S.dye='mb';drawDyeLbl();drawPanel()},{on:S.dye==='mb',dis:S.busy,fs:26});
+      btn('ink',490,ey,300,56,'Suyultirilgan siyoh',()=>{S.dye='ink';drawDyeLbl();drawPanel()},{on:S.dye==='ink',dis:S.busy,fs:26});
+    }
+    pg.font=`600 23px ${F}`;pg.fillStyle=MSGC[S.mc];
+    const msg=boilT>=0?`Qaynamoqda: ${fmt(boilT*900)} / 15:00 (vaqt tezlashtirilgan)`:S.msg;wrap(pg,msg,40,566,PW-80,28);
+    btn('go',40,606,470,80,S.busy?'Bajarilmoqda…':'▶ '+a.l,doAct,{primary:true,dis:S.busy});
+    if(a.id==='take'&&S.growth<.8) btn('reinc',526,606,170,80,'Qayta saqlash',()=>{const k=S.ai;S.ai=k;reinc()},{dis:S.busy,fs:24});
+    else btn('info',526,606,170,80,'Hayotda',()=>{S.info=true;drawPanel()},{fs:24});
+    btn('demo',712,606,150,80,'Ichiga',()=>{if(!S.busy)demoMicro()},{dis:S.busy,fs:24});
+    btn('reset',878,606,106,80,'Qayta',()=>{if(!S.busy)resetLab()},{dis:S.busy,fs:24});
+  } else drawMicroPanel();
+  P.t.needsUpdate=true;
+}
+async function reinc(){if(S.busy)return;S.busy=true;drawPanel();try{await incubate()}finally{S.busy=false;drawPanel()}}
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');
+const FACTS=[
+ ['Konserva sterilizatsiyasi','Sporalar 100 °C dagi qaynatishga chidaydi. Shuning uchun konservalar avtoklavda 121 °C da bosim ostida ishlov beriladi.'],
+ ['Nonning “cho‘zilish kasalligi”','Issiq va nam havoda non ichi yopishqoq ip-ip bo‘lib qoladi. Sababi: pishirishda tirik qolgan pichan tayoqchasi sporalari.'],
+ ['Natto','Yaponiyada soya donlari B. subtilis bilan bijg‘itiladi. Bu xalq taomi ming yillardan beri tayyorlanadi.'],
+ ['Fermentlar va probiotiklar','Kir yuvish kukunidagi proteaza va amilaza, ayrim probiotik dorilar shu bakteriya yordamida olinadi.'],
+ ['Tuproq va o‘simliklar','Ildiz atrofida yashab, o‘simlikni zamburug‘ kasalliklaridan himoya qiladi. Undan biopreparatlar tayyorlanadi.']
+];
+function drawInfo(){
+  head('HAYOTDAGI HODISA','REAL MISOLLAR',1);
+  pg.fillStyle='#e4eef0';pg.font=`800 38px 'Bricolage Grotesque',${F}`;pg.fillText('Pichan tayoqchasi atrofimizda',40,128);
+  let y=180;FACTS.forEach(([h,t])=>{pg.font=`700 24px ${F}`;pg.fillStyle='#7ef0b0';pg.fillText(h,40,y);pg.font=`400 22px ${F}`;pg.fillStyle='#c4d3d7';y=wrap(pg,t,40,y+30,PW-80,28)+14});
+  btn('back',40,606,300,80,'← Orqaga',()=>{S.info=false;drawPanel()},{primary:true});
+}
+const STG=[
+ {n:'Vegetativ hujayra',d:'Oziq yetarli bo‘lsa hujayra o‘sadi, bo‘linadi va peritrix xivchinlari bilan suzadi.',h:{sept:0,fs:0,fsCol:0,fsOp:1,cell:1,flag:1,cs:1,cx:0,gl:0}},
+ {n:'1. Asimmetrik bo‘linish',d:'Oziq tugaganda DNK nusxalanadi va hujayraning bir qutbida to‘siq (septum) paydo bo‘ladi.',h:{sept:1,fs:0,fsCol:0,fsOp:1,cell:1,flag:1,cs:1,cx:0,gl:0}},
+ {n:'2. Prosporaning yutilishi',d:'Ona hujayra kichik bo‘lakni membranasi bilan o‘rab oladi: hujayra ichida prospora hosil bo‘ladi.',h:{sept:0,fs:.6,fsCol:0,fsOp:1,cell:1,flag:.6,cs:1,cx:0,gl:0}},
+ {n:'3. Korteks va qobiq',d:'Prospora atrofida qalin korteks va oqsil qobiq qatlamlari quriladi. Hujayra harakatdan to‘xtaydi.',h:{sept:0,fs:1,fsCol:1,fsOp:1,cell:1,flag:0,cs:1,cx:0,gl:0}},
+ {n:'4. Yetilgan endospora',d:'Spora suvsizlanadi va nurni kuchli sindiradi: mikroskopda yaltiroq oval tanacha bo‘lib ko‘rinadi.',h:{sept:0,fs:1,fsCol:1,fsOp:1,cell:1,flag:0,cs:1,cx:0,gl:1}},
+ {n:'5. Ona hujayraning lizisi',d:'Ona hujayra eriydi, spora tashqariga chiqadi. U qaynatish, quritish va zaharlarga yillar davomida chidaydi.',h:{sept:0,fs:1,fsCol:1,fsOp:1,cell:0,flag:0,cs:1,cx:0,gl:1}},
+ {n:'6. O‘sib chiqish',d:'Qulay sharoitda (suv, oziq, 20–25 °C) spora bo‘rtadi va undan yangi vegetativ hujayra o‘sib chiqadi.',h:{sept:0,fs:1.2,fsCol:1,fsOp:0,cell:1,flag:1,cs:1,cx:0,gl:1}}
+];
+function drawMicroPanel(){
+  head('PREPARAT ICHIDA · 1 MKM ≈ 6 SM',`SPORA HOSIL BO‘LISHI ${S.stage} / 6`,S.stage/6);
+  pg.fillStyle='#e4eef0';pg.font=`800 40px 'Bricolage Grotesque',${F}`;pg.fillText(STG[S.stage].n,40,128);
+  pg.font=`400 26px ${F}`;pg.fillStyle='#e4eef0';let y=wrap(pg,STG[S.stage].d,40,174,PW-80,34);
+  pg.font=`600 22px ${F}`;pg.fillStyle='#e8c25a';pg.fillText('Atrofingizda',40,y+18);
+  pg.font=`400 22px ${F}`;pg.fillStyle='#a9bcc1';
+  const n=swarm.length,sp=swarm.filter(b=>b.t!=='rod'||b.spore).length;
+  y=wrap(pg,`${S.dye==='ink'?'Binafsharang':'Havorang'} fonda ${n} ta obyekt: harakatchan bo‘yalgan tayoqchalar, zanjirlar va ${sp} ta yaltiroq spora (hujayra ichida yoki erkin). Haqiqiy mikroskopda xivchinlar ko‘rinmaydi; ular bu modelda ko‘rsatilgan.`,40,y+48,PW-80,29);
+  if(!S.demo){const g=S.growth;pg.fillStyle=g>=.8?'#7ef0b0':'#e8c25a';pg.font=`600 22px ${FM}`;pg.fillText(`${S.temp} °C · ${S.days} kun · parda: ${g>=.8?'qalin':g>=.4?'o‘rtacha':'yupqa'}`,40,y+18)}
+  btn('next',40,606,400,80,S.stage===6?'↺ Boshidan':'Keyingi bosqich ▶',nextStage,{primary:true,dis:S.busy});
+  btn('info',456,606,250,80,'Hayotdagi hodisa',()=>{S.info=true;drawPanel()},{fs:26});
+  btn('lab',722,606,262,80,'← Laboratoriya',exitMicro,{fs:26});
+}
+
+/* ============ MICRO WORLD ============ */
+const micro=new T.Group();micro.visible=false;scene.add(micro);
+const DOME={mb:0xb7d2ef,ink:0xd2c9e7};
+const dome=mesh(new T.SphereGeometry(9,40,20),new T.MeshBasicMaterial({color:DOME.mb,side:T.BackSide,fog:false}));micro.add(dome);
+{const n=500,pos=new Float32Array(n*3);for(let i=0;i<n;i++){const r=1+R()*6,a=R()*PI*2,b=Math.acos(2*R()-1);pos[i*3]=r*Math.sin(b)*Math.cos(a);pos[i*3+1]=1.5+r*Math.cos(b)*.6;pos[i*3+2]=r*Math.sin(b)*Math.sin(a)}
+ const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));micro.add(new T.Points(g,new T.PointsMaterial({color:0xffffff,size:.018,transparent:true,opacity:.45})))}
+const cellMat=new T.MeshStandardMaterial({color:DYE.mb,roughness:.45,transparent:true,opacity:.93});
+const sporeMat=new T.MeshPhysicalMaterial({color:0xf7fbff,emissive:0x9cc2ff,emissiveIntensity:.35,roughness:.12,clearcoat:1,clearcoatRoughness:.05});
+const rodGeo=capsuleGeo(.0225,.11),spGeo=new T.SphereGeometry(.021,20,12);
+const swarmG=new T.Group();micro.add(swarmG);let swarm=[];
+const XA=V(1,0,0),HERO_P=V(.4,1.45,-.95);
+function buildSwarm(){
+  swarmG.clear();swarm=[];const g=S.demo?.95:Math.max(.15,S.growth),days=S.demo?4:S.days;
+  const N=Math.round(25+70*g),sf=Math.min(.45,.08+days*.05);
+  for(let i=0;i<N;i++){
+    let p;do{p=V((R()-.5)*6,.2+R()*3,-5+R()*6.5)}while(p.distanceTo(V(0,1.5,0))<.85||p.distanceTo(HERO_P)<.55||p.distanceTo(V(-.55,1.45,-.95))<.6);
+    const grp=new T.Group();grp.position.copy(p);let b;
+    if(R()<sf*.4){const s=mesh(spGeo,sporeMat);s.scale.set(1.6,1,1);grp.add(s);b={t:'spore'}}
+    else{const n=R()<.2?2:1,spore=n===1&&R()<sf;for(let k=0;k<n;k++){grp.add(mesh(rodGeo,cellMat,(k-(n-1)/2)*.162,0,0))}
+      if(spore){const s=mesh(spGeo,sporeMat,R()<.5?0:.035,0,0);s.scale.set(1.5,.95,.95);grp.add(s)}
+      b={t:'rod',spore,mot:!spore&&R()<.8,v:.06+R()*.1}}
+    b.g=grp;b.d=V(R()-.5,(R()-.5)*.5,R()-.5).normalize();b.tm=R()*3;grp.quaternion.setFromUnitVectors(XA,b.d);swarmG.add(grp);swarm.push(b)}
+}
+const qt=new T.Quaternion();
+function stepSwarm(dt){for(const b of swarm){const p=b.g.position;
+  if(b.mot){b.tm-=dt;if(b.tm<0){b.d.set(R()-.5,(R()-.5)*.5,R()-.5).normalize();b.tm=1+R()*3}
+    if(Math.abs(p.x)>3.2||p.y<.15||p.y>3.4||p.z<-5.2||p.z>1.8){b.d.copy(V(0,1.6,-1.5).sub(p)).normalize()}
+    p.addScaledVector(b.d,b.v*dt);qt.setFromUnitVectors(XA,b.d);b.g.quaternion.slerp(qt,Math.min(1,dt*4))}
+  else{p.x+=(R()-.5)*.004;p.y+=(R()-.5)*.004;p.z+=(R()-.5)*.004;b.g.rotation.z+=dt*.05}}}
+
+// hero cell
+const hero=new T.Group();hero.position.copy(HERO_P);hero.scale.setScalar(1.25);micro.add(hero);
+const body=new T.Group();hero.add(body);const sporeG=new T.Group();hero.add(sporeG);
+const hL=.27,hR=.048;
+const memMat=new T.MeshPhysicalMaterial({color:0xd6e8ff,transparent:true,opacity:.3,roughness:.2,clearcoat:.6,depthWrite:false,side:T.DoubleSide});
+const mem=mesh(capsuleGeo(hR,hL,16),memMat);mem.renderOrder=4;body.add(mem);
+const cytoMat=new T.MeshStandardMaterial({color:DYE.mb,transparent:true,opacity:.5,roughness:.6,depthWrite:false});
+body.add(mesh(capsuleGeo(hR*.86,hL*.97,16),cytoMat));
+const nucPts=[];for(let i=0;i<14;i++)nucPts.push(V(-.1+i*.012+(R()-.5)*.02,(R()-.5)*.035,(R()-.5)*.035));
+const nucMat=new T.MeshStandardMaterial({color:0x9b3fd0,emissive:0x3a0d55,transparent:true,opacity:.9});
+const nuc=mesh(new T.TubeGeometry(new T.CatmullRomCurve3(nucPts),160,.0038,6),nucMat);body.add(nuc);
+{const n=260,pos=new Float32Array(n*3);for(let i=0;i<n;i++){pos[i*3]=(R()-.5)*.3;const a=R()*PI*2,r=Math.sqrt(R())*.038;pos[i*3+1]=Math.cos(a)*r;pos[i*3+2]=Math.sin(a)*r}
+ const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));body.add(new T.Points(g,new T.PointsMaterial({color:0x0e2450,size:.006})))}
+const sept=mesh(new T.CircleGeometry(hR*.84,32),new T.MeshBasicMaterial({color:0x6ff0ff,transparent:true,opacity:0,side:T.DoubleSide,depthWrite:false}),.085,0,0);sept.rotation.y=PI/2;body.add(sept);
+const foreMat=new T.MeshStandardMaterial({color:0x9fd3ff,transparent:true,opacity:.6,roughness:.5});
+const heroSpore=sporeMat.clone();heroSpore.transparent=true;
+const fore=mesh(new T.SphereGeometry(.036,32,16),foreMat,.115,0,0);fore.scale.set(1.35,1,1);sporeG.add(fore);
+const flagMat=new T.LineBasicMaterial({color:0x0d2c66,transparent:true,opacity:.9});
+const flags=[];for(let i=0;i<12;i++){const x=(R()-.5)*hL,ph=R()*PI*2;const base=V(x,Math.cos(ph)*hR,Math.sin(ph)*hR);
+  const dir=V(-.7,Math.cos(ph),Math.sin(ph)).normalize();const u=new T.Vector3().crossVectors(dir,XA).normalize();const w=new T.Vector3().crossVectors(dir,u);
+  const N=28,pos=new Float32Array(N*3),g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));const l=new T.Line(g,flagMat);body.add(l);flags.push({base,dir,u,w,N,pos,g,len:.42+R()*.15,ph:R()*PI*2})}
+function stepFlags(t){if(flagMat.opacity<.02)return;for(const f of flags){for(let i=0;i<f.N;i++){const s=i/(f.N-1)*f.len,a=f.ph+t*14-s*38,amp=.022*Math.min(1,s/.05);
+  f.pos[i*3]=f.base.x+f.dir.x*s+(f.u.x*Math.cos(a)+f.w.x*Math.sin(a))*amp;f.pos[i*3+1]=f.base.y+f.dir.y*s+(f.u.y*Math.cos(a)+f.w.y*Math.sin(a))*amp;f.pos[i*3+2]=f.base.z+f.dir.z*s+(f.u.z*Math.cos(a)+f.w.z*Math.sin(a))*amp}f.g.attributes.position.needsUpdate=true}}
+// labels
+function label(text){const c=document.createElement('canvas'),g=c.getContext('2d');g.font=`700 34px ${F}`;const w=Math.ceil(g.measureText(text).width)+44;c.width=w;c.height=64;
+  g.fillStyle='rgba(10,18,22,.88)';rrp(g,0,0,w,64,18);g.fill();g.fillStyle='#ffffff';g.font=`700 34px ${F}`;g.textBaseline='middle';g.fillText(text,22,34);
+  const t=new T.CanvasTexture(c);const s=new T.Sprite(new T.SpriteMaterial({map:t,depthTest:false,transparent:true}));s.scale.set(.05*w/64,.05,1);s.renderOrder=20;return s}
+const LBL=[
+ {t:'Hujayra devori',p:[-.13,.045,0],a:[-.34,.21,0],st:[0,1,2,3,4,6]},
+ {t:'Sitoplazma',p:[.04,-.03,0],a:[.12,-.24,0],st:[0,1,2,3,4,6]},
+ {t:'Nukleoid (DNK)',p:[-.05,0,0],a:[-.36,-.18,0],st:[0,1,2,3,4,6]},
+ {t:'Septum (to‘siq)',p:[.085,.03,0],a:[.3,.2,0],st:[1]},
+ {t:'Prospora',p:[.115,0,0],a:[.34,.2,0],st:[2,3]},
+ {t:'Endospora',p:[.115,0,0],a:[.34,.2,0],st:[4,5,6]},
+ {t:'Xivchinlar (peritrix)',p:[-.2,.09,0],a:[-.08,.33,0],st:[0,1,2,6]}
+].map(L=>{const s=label(L.t);s.position.set(...L.a);hero.add(s);const g=new T.BufferGeometry().setFromPoints([V(...L.a),V(...L.p)]);const ln=new T.Line(g,new T.LineBasicMaterial({color:0x0b1a22,transparent:true,opacity:.75,depthTest:false}));ln.renderOrder=19;hero.add(ln);return Object.assign(L,{s,ln})});
+{const bar=mesh(new T.BoxGeometry(.12,.006,.006),new T.MeshBasicMaterial({color:0x0b1a22}),0,-.3,0);hero.add(bar);const s=label('1 mkm');s.position.set(0,-.34,0);s.scale.multiplyScalar(.8);hero.add(s)}
+const H=Object.assign({},STG[0].h);
+function applyHero(){
+  memMat.opacity=.3*H.cell;cytoMat.opacity=.5*H.cell;nucMat.opacity=.9*H.cell;nuc.visible=H.cell>.05;mem.visible=H.cell>.01;
+  body.scale.setScalar(Math.max(.01,H.cs));body.position.x=H.cx;
+  sept.material.opacity=.85*H.sept;flagMat.opacity=.9*H.flag*H.cell;flags.forEach(f=>f.g.setDrawRange(0,flagMat.opacity>.02?f.N:0));
+  fore.visible=H.fs>.01&&H.fsOp>.01;fore.scale.set(1.35*H.fs,H.fs,H.fs);
+  if(H.gl>=.5){fore.material=heroSpore;heroSpore.opacity=H.fsOp}else{fore.material=foreMat;foreMat.color.setHex(0x9fd3ff).lerp(new T.Color(0xefe2c2),H.fsCol);foreMat.opacity=(.55+.4*H.fsCol)*H.fsOp}
+  LBL.forEach(L=>{const v=L.st.includes(S.stage);L.s.visible=v;L.ln.visible=v});
+}
+async function heroTo(tg,d=1.6){const f=Object.assign({},H);await tw(d,p=>{for(const k in tg){if(k==='gl')continue;H[k]=f[k]+(tg[k]-f[k])*p}applyHero()});}
+async function nextStage(){if(S.busy)return;S.busy=true;drawPanel();
+  try{const k=(S.stage+1)%7;S.stage=k;
+    if(k===0){Object.assign(H,STG[0].h);applyHero()}
+    else{const tg=STG[k].h;if(k===6){H.cs=.35;H.cx=.115;H.cell=0}H.gl=tg.gl;await heroTo(tg)}
+  }finally{S.busy=false;drawPanel()}}
+
+function setDyeColors(){cellMat.color.setHex(DYE[S.dye]);cytoMat.color.setHex(DYE[S.dye]);dome.material.color.setHex(DOME[S.dye]);if(scene.fog)scene.fog.color.setHex(DOME[S.dye])}
+async function fadeOut(){$('#fade').style.opacity=1;await new Promise(r=>setTimeout(r,450))}
+function fadeIn(){$('#fade').style.opacity=0}
+async function enterMicro(){
+  if(!renderer.xr.isPresenting)await fadeOut();
+  S.mode='micro';S.stage=0;Object.assign(H,STG[0].h);setDyeColors();buildSwarm();applyHero();
+  room.visible=false;labG.visible=false;micro.visible=true;
+  if(xrMode==='immersive-ar'){dome.visible=false;scene.fog=null}else{dome.visible=true;scene.background=new T.Color(DOME[S.dye]);scene.fog=new T.FogExp2(DOME[S.dye],.16)}
+  placePanel();setOrbit('micro');drawPanel();fadeIn();
+}
+async function exitMicro(){if(S.busy)return;if(!renderer.xr.isPresenting)await fadeOut();S.mode='lab';S.info=false;micro.visible=false;room.visible=xrMode!=='immersive-ar';labG.visible=true;scene.fog=null;scene.background=xrMode==='immersive-ar'?null:BG_LAB;placePanel();setOrbit('lab');drawPanel();fadeIn()}
+function demoMicro(){S.demo=true;S.dye='mb';drawDyeLbl();enterMicro()}
+function resetLab(){Object.assign(S,{temp:25,days:3,dye:'mb',growth:0,ai:0,busy:false,info:false,demo:false,msg:'Yashil strelka ko‘rsatgan suv idishiga bosing yoki pastdagi yashil tugmani tanlang.',mc:''});tws.length=0;boilT=-1;buildLab();drawPanel()}
+function placePanel(){if(S.mode==='lab'){panel.position.set(0,1.62,-1.12);panel.rotation.set(0,0,0)}else{panel.position.set(-.58,1.45,-.95);panel.rotation.set(0,.5,0)}}
+
+/* ============ CAMERA ORBIT (desktop/mobile) ============ */
+const orb={t:V(0,1.0,-.62),r:1.15,th:0,ph:1.0,min:.35,max:1.55,rmin:.25,rmax:3};
+function setOrbit(m){if(m==='lab')Object.assign(orb,{t:V(0,1.2,-.7),r:1.5,th:0,ph:1.22,min:.35,max:1.6});else Object.assign(orb,{t:V(-.08,1.45,-.95),r:1.2,th:0,ph:1.5,min:.3,max:2.8})}
+function applyOrbit(){if(renderer.xr.isPresenting)return;camera.position.set(orb.t.x+orb.r*Math.sin(orb.ph)*Math.sin(orb.th),orb.t.y+orb.r*Math.cos(orb.ph),orb.t.z+orb.r*Math.sin(orb.ph)*Math.cos(orb.th));camera.lookAt(orb.t)}
+const ptrs=new Map();let down=null,pinch=0;
+const el=renderer.domElement,ray=new T.Raycaster(),ndc=new T.Vector2();
+function pick(cx,cy){const r=el.getBoundingClientRect();ndc.set((cx-r.left)/r.width*2-1,-(cy-r.top)/r.height*2+1);ray.setFromCamera(ndc,camera);return hitTest()}
+function hitTest(){const list=[panel];if(S.mode==='lab'&&!S.info)list.push(labG);const h=ray.intersectObjects(list,true).filter(i=>i.object.visible&&i.object!==O.arrow);return h[0]||null}
+function panelBtn(h){if(!h||h.object!==panel||!h.uv)return null;const x=h.uv.x*PW,y=(1-h.uv.y)*PH;return btns.find(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)||null}
+function activate(h){if(!h)return;if(h.object===panel){const b=panelBtn(h);if(b&&!b.dis)b.fn();return}
+  let o=h.object;while(o&&!o.userData.key)o=o.parent;if(!o)return;
+  if(S.mode!=='lab'||S.busy)return;const a=ACTS[S.ai];
+  if(a.k.includes(o.userData.key))doAct();else say(`Hozirgi amal: “${a.l}”. Yashil strelka ko‘rsatgan jismni tanlang.`,'warn')}
+function setHover(id){if(id!==hoverId){hoverId=id;drawPanel()}}
+el.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});el.setPointerCapture(e.pointerId);if(ptrs.size===1)down={x:e.clientX,y:e.clientY,moved:false};else{down=null;const [a,b]=[...ptrs.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y)}});
+el.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);
+  if(p){const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+    if(ptrs.size===2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);if(pinch)orb.r=Math.min(orb.rmax,Math.max(orb.rmin,orb.r*pinch/d));pinch=d}
+    else if(down){if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)down.moved=true;if(down.moved){orb.th-=dx*.006;orb.ph=Math.min(orb.max,Math.max(orb.min,orb.ph-dy*.006))}}}
+  else{const h=pick(e.clientX,e.clientY);const b=panelBtn(h);setHover(b?b.id:null);let o=h&&h.object;while(o&&!o.userData.key)o=o.parent;el.style.cursor=(b&&!b.dis)||o?'pointer':'grab'}});
+el.addEventListener('pointerup',e=>{if(down&&!down.moved&&ptrs.size===1)activate(pick(e.clientX,e.clientY));ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=0;if(!ptrs.size)down=null});
+el.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);down=null});
+el.addEventListener('wheel',e=>{e.preventDefault();orb.r=Math.min(orb.rmax,Math.max(orb.rmin,orb.r*(e.deltaY>0?1.1:.9)))},{passive:false});
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+
+/* ============ WebXR ============ */
+let xrMode=null;const ctrls=[];const tmpM=new T.Matrix4();
+for(let i=0;i<2;i++){const c=renderer.xr.getController(i);const g=new T.BufferGeometry().setFromPoints([V(0,0,0),V(0,0,-1)]);
+  const line=new T.Line(g,new T.LineBasicMaterial({color:0x7ef0b0}));line.scale.z=2;c.add(line);
+  const dot=mesh(new T.SphereGeometry(.008,10,8),new T.MeshBasicMaterial({color:0x7ef0b0}));dot.visible=false;scene.add(dot);
+  c.userData={line,dot};c.addEventListener('select',()=>activate(ctrlHit(c)));scene.add(c);ctrls.push(c)}
+function ctrlHit(c){tmpM.identity().extractRotation(c.matrixWorld);ray.ray.origin.setFromMatrixPosition(c.matrixWorld);ray.ray.direction.set(0,0,-1).applyMatrix4(tmpM);return hitTest()}
+async function startXR(mode){
+  if(!navigator.xr){toast('Bu brauzer WebXR ni qo‘llamaydi. Meta Quest brauzeri, Chrome (Android, ARCore) yoki Edge dan foydalaning.');return}
+  try{
+    const ok=await navigator.xr.isSessionSupported(mode);
+    if(!ok){toast(mode==='immersive-vr'?'Bu qurilmada VR rejim mavjud emas. Sahifani Meta Quest (yoki boshqa VR shlem) brauzerida oching.':'Bu qurilmada AR rejim mavjud emas. ARCore qo‘llaydigan Android telefonda Chrome orqali yoki Quest 3 da oching.');return}
+    const sess=await navigator.xr.requestSession(mode,{optionalFeatures:['local-floor','bounded-floor','hand-tracking']});
+    renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(sess);xrMode=mode;
+    if(mode==='immersive-ar'){scene.background=null;room.visible=false;dome.visible=false;scene.fog=null}
+    sess.addEventListener('end',()=>{xrMode=null;room.visible=S.mode==='lab';if(S.mode==='lab')scene.background=BG_LAB;else{dome.visible=true;scene.background=new T.Color(DOME[S.dye]);scene.fog=new T.FogExp2(DOME[S.dye],.16)}});
+  }catch(err){toast('XR sessiyasini ochib bo‘lmadi ('+(err&&err.name||'xato')+'). Ko‘rish oynasi VR ga ruxsat bermagan bo‘lishi mumkin: HTML faylni HTTPS saytga joylab, shlem brauzerida to‘g‘ridan-to‘g‘ri oching.')}
+}
+$('#vrBtn').onclick=()=>startXR('immersive-vr');$('#arBtn').onclick=()=>startXR('immersive-ar');$('#microBtn').onclick=()=>{if(S.mode==='lab'&&!S.busy)demoMicro()};
+
+/* ============ LOOP ============ */
+const clock=new T.Clock();let time=0,lastPanel=0;const bb=new T.Box3();
+renderer.setAnimationLoop(()=>{
+  const dt=Math.min(.05,clock.getDelta());time+=dt;runTw(dt);applyOrbit();
+  if(S.mode==='lab'&&labG){
+    if(O.flame.visible)O.flame.scale.set(1+Math.sin(time*40)*.05,1+Math.sin(time*31)*.08,1);
+    if(boilT>=0){O.bubbles.forEach(b=>{b.position.y+=dt*.09;if(b.position.y>.052*O.fLiq.scale.y/.85+.01)b.position.y=.006});
+      O.steam.forEach((s,i)=>{const k=((time*.4+i/6)%1);s.position.set(Math.sin(time+i)*.01,.18+k*.14,0);s.material.opacity=.3*(1-k);s.scale.setScalar(.6+k)});
+      if(time-lastPanel>.25){lastPanel=time;drawPanel()}}
+    const a=ACTS[S.ai],tgt=O[a.k[0]];O.arrow.visible=!S.busy&&!!tgt&&!S.info;
+    if(O.arrow.visible){bb.setFromObject(tgt);O.arrow.position.set((bb.min.x+bb.max.x)/2,bb.max.y+.05+Math.sin(time*4)*.012,(bb.min.z+bb.max.z)/2)}
+  } else if(S.mode==='micro'){stepSwarm(dt);body.rotation.x+=dt*.35;sporeG.rotation.x=body.rotation.x;stepFlags(time)}
+  if(renderer.xr.isPresenting){let hid=null;for(const c of ctrls){const h=ctrlHit(c);c.userData.line.scale.z=h?h.distance:2;c.userData.dot.visible=!!h;if(h){c.userData.dot.position.copy(h.point);const b=panelBtn(h);if(b)hid=b.id}}setHover(hid)}
+  renderer.render(scene,camera);
+});
+
+buildLab();placePanel();setOrbit('lab');applyHero();drawPanel();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{drawPanel();drawDisp();drawDyeLbl()});
+$('#loading').hidden=true;
+if(navigator.xr&&navigator.xr.isSessionSupported){navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok)$('#vrBtn').textContent='VR ga kirish'}).catch(()=>{})}
+})();
+</script>
